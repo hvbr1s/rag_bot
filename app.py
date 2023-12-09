@@ -228,7 +228,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Classify the query with Cohere
             try:
-                # Classify the query with Cohere
                 res = co.classify(
                     inputs=[user_input],
                     examples=examples,
