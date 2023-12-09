@@ -14,6 +14,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from fastapi import BackgroundTasks
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
+from cohere.responses.classify import Example
 from nostril import nonsense
 import tiktoken
 import re
@@ -35,7 +36,6 @@ async def get_api_key(api_key_header: str = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return api_key_header
 
-
 # Define query class
 class Query(BaseModel):
     user_input: str
@@ -52,6 +52,35 @@ index = pinecone.Index(index_name)
 # Initialize Cohere
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
+
+# Initialize Cohere classifier categories
+examples=[
+  # Passphrase  
+  Example("There's no way to recover the accounts behind the passphrase if I don't remember it?", "Passphrase"),
+  Example("How can I verify my Passphrase? I want to make sure that it is correct.", "Passphrase"),
+  # Scam
+  Example("I have had messenger send me a form to fill in my 24 word phrase to update it, can I do it that way?", "Scam"),
+  Example("A ledger employee asked me for my 24-word recovery phrase on Twitter", "Scam"),
+  # Cardano staking
+  Example("how can I claim rewards for cardano?", "Staking Cardano"),\
+  Example("Does  ADA rewards compound?", "Staking Cardano"),
+  ## Cosmos
+  Example("does ATOM rewards compound?", "Cosmos Staking"),
+  Example("can't delegate my Cosmos", "Cosmos Staking"),
+  # Solana
+  Example("network error on SOl", "Solana"),
+  Example(" Does Solana have receiving address changing like Bitcoin?", "Solana"),
+  # Solana staking
+  Example("SOL commission 95%?", "Solana Staking"),
+  Example("can I stake SOL on solfalre?", "Solana Staking"),
+  Example("I cannot deactivate staking in Ledger with SOL", "Solana Staking"),
+  # Other
+  Example("can you please tell me if you have a physical store in Paris?", "Other"),
+  Example("does ledger hire?", "Other"),
+  # Swap Changelly
+  Example("Swapped 900 matic to solana account and swap is complete but no solana", "Swap Changelly"),
+  Example("I cannot swap swap BNB for XRP through Changelly", "Swap Changelly"),
+]
 
 # Email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -106,7 +135,7 @@ TIMEOUT_SECONDS = 1 * 25 * 60  # 25 minutes
 
 async def periodic_cleanup():
     while True:
-        cleanup_expired_states()
+        await cleanup_expired_states()
         await asyncio.sleep(TIMEOUT_SECONDS)
 
 # Invoke periodic cleanup
@@ -116,7 +145,7 @@ async def startup_event():
     background_tasks.add_task(periodic_cleanup)
 
 # Handle cleanup crashes gracefully
-def cleanup_expired_states():
+async def cleanup_expired_states():
     try:
         current_time = time.time()
         expired_users = [
@@ -146,35 +175,6 @@ async def generic_exception_handler(request, exc):
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"message": "Snap! Something went wrong, please try again!"},
     )
-
-# Define categorizer
-@app.post('/categorize')
-async def categorize_input(query: Query, api_key: str = Depends(get_api_key)):  
-    def load_categories():
-        filename = f'classifier_prompt.txt'
-        try:
-            with open(filename, 'r') as categories:
-                return categories.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail=f"Categories not found!")
-        
-    classifier_prompt = load_categories()
-    
-    user_input = query.user_input.strip()
-
-    resp = openai.ChatCompletion.create(
-        temperature=0,
-        model='gpt-3.5-turbo',
-        seed=0,
-        messages=[
-            {"role": "system", "content": classifier_prompt},
-            {"role": "user", "content": user_input}
-        ],
-        request_timeout=5.0,
-        max_tokens=50,
-    )
-    category = resp['choices'][0]['message']['content']
-    return {"output": category}
 
 # Define supported locales for data retrieval
 SUPPORTED_LOCALES = {'eng', 'fr'}
@@ -239,7 +239,21 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
-            
+
+            # Classify the query with Cohere
+            try:
+                # Classify the query with Cohere
+                res = co.classify(
+                    inputs=[user_input],
+                    examples=examples,
+                )
+                prediction = res.classifications
+                category = prediction[0].predictions[0]
+            except Exception as e:
+                print(f"Classification failed: {e}")
+                category = 'Could not categorize'
+            print(category)
+  
             #############
                        
             async def retrieve(query, contexts=None):
@@ -329,7 +343,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             }
 
             print("\n\n" + response + "\n\n")
-            return {'output': response}
+            return {'output': response, 'category': category}
     
         except ValueError as e:
             print(e)

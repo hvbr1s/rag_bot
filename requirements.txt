@@ -12,7 +12,6 @@ slowapi
 httpx
 git+https://github.com/casics/nostril.git
 tiktoken
-langsmith
 bs4
 apscheduler
 helicone
