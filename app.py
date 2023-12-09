@@ -46,11 +46,8 @@ class Query(BaseModel):
 openai.api_key=os.environ['OPENAI_API_KEY']
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
-index_name = 'prod'
+index_name = 'database'
 index = pinecone.Index(index_name)
-
-# Initilize embedding model
-embed_model = "text-embedding-ada-002"
 
 # Initialize Cohere
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
@@ -250,11 +247,12 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 contexts = []
                 
                 # Prepare embeddings
-                res_embed = openai.Embedding.create(
-                    input=[user_input],
-                    engine=embed_model
+                response = co.embed(
+                    texts=[user_input],
+                    model='embed-english-v3.0',
+                    input_type='search_document'
                 )
-                xq = res_embed['data'][0]['embedding']
+                xq = response.embeddings
 
                 try:
                     # Pulls 7 chunks from Pinecone
