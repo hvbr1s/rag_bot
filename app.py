@@ -21,6 +21,7 @@ import re
 import time
 import cohere
 import asyncio
+from typing import NamedTuple
 
 
 # Initialize environment variables
@@ -53,34 +54,43 @@ index = pinecone.Index(index_name)
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
 
-# Initialize Cohere classifier categories
-examples=[
-  # Passphrase  
-  Example("There's no way to recover the accounts behind the passphrase if I don't remember it?", "Passphrase"),
-  Example("How can I verify my Passphrase? I want to make sure that it is correct.", "Passphrase"),
-  # Scam
-  Example("I have had messenger send me a form to fill in my 24 word phrase to update it, can I do it that way?", "Scam"),
-  Example("A ledger employee asked me for my 24-word recovery phrase on Twitter", "Scam"),
-  # Cardano staking
-  Example("how can I claim rewards for cardano?", "Staking Cardano"),\
-  Example("Does  ADA rewards compound?", "Staking Cardano"),
-  ## Cosmos
-  Example("does ATOM rewards compound?", "Cosmos Staking"),
-  Example("can't delegate my Cosmos", "Cosmos Staking"),
-  # Solana
-  Example("network error on SOl", "Solana"),
-  Example(" Does Solana have receiving address changing like Bitcoin?", "Solana"),
-  # Solana staking
-  Example("SOL commission 95%?", "Solana Staking"),
-  Example("can I stake SOL on solfalre?", "Solana Staking"),
-  Example("I cannot deactivate staking in Ledger with SOL", "Solana Staking"),
-  # Other
-  Example("can you please tell me if you have a physical store in Paris?", "Other"),
-  Example("does ledger hire?", "Other"),
-  # Swap Changelly
-  Example("Swapped 900 matic to solana account and swap is complete but no solana", "Swap Changelly"),
-  Example("I cannot swap swap BNB for XRP through Changelly", "Swap Changelly"),
-]
+# Initialize and load Cohere classifier categories
+Example = NamedTuple("Example", [("text", str), ("label", str)])
+def load_examples(file_path):
+    with open(file_path, 'r') as file:
+        examples_list = json.load(file)
+        return [Example(**ex) for ex in examples_list]
+
+# Load the examples from the file
+examples = load_examples('/home/dan/knowledge_bot/examples.json')
+
+# examples=[
+#   # Passphrase  
+#   Example("There's no way to recover the accounts behind the passphrase if I don't remember it?", "Passphrase"),
+#   Example("How can I verify my Passphrase? I want to make sure that it is correct.", "Passphrase"),
+#   # Scam
+#   Example("I have had messenger send me a form to fill in my 24 word phrase to update it, can I do it that way?", "Scam"),
+#   Example("A ledger employee asked me for my 24-word recovery phrase on Twitter", "Scam"),
+#   # Cardano staking
+#   Example("how can I claim rewards for cardano?", "Staking Cardano"),\
+#   Example("Does  ADA rewards compound?", "Staking Cardano"),
+#   ## Cosmos
+#   Example("does ATOM rewards compound?", "Cosmos Staking"),
+#   Example("can't delegate my Cosmos", "Cosmos Staking"),
+#   # Solana
+#   Example("network error on SOl", "Solana"),
+#   Example(" Does Solana have receiving address changing like Bitcoin?", "Solana"),
+#   # Solana staking
+#   Example("SOL commission 95%?", "Solana Staking"),
+#   Example("can I stake SOL on solfalre?", "Solana Staking"),
+#   Example("I cannot deactivate staking in Ledger with SOL", "Solana Staking"),
+#   # Other
+#   Example("can you please tell me if you have a physical store in Paris?", "Other"),
+#   Example("does ledger hire?", "Other"),
+#   # Swap Changelly
+#   Example("Swapped 900 matic to solana account and swap is complete but no solana", "Swap Changelly"),
+#   Example("I cannot swap swap BNB for XRP through Changelly", "Swap Changelly"),
+# ]
 
 # Email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'

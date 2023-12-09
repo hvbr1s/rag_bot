@@ -6,5 +6,5 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir wheel
 RUN sed -i '599s|min_length=6|min_length=0|' /usr/local/lib/python3.10/site-packages/nostril/nonsense_detector.py
 ADD templates ./templates/
 ADD static ./static/
-COPY app.py system_prompt_eng.txt system_prompt_fr.txt classifier_prompt.txt ./
+COPY app.py system_prompt_eng.txt system_prompt_fr.txt classifier_prompt.txt examples.json ./
 CMD [ "uvicorn", "app:app", "--port", "80", "--host", "0.0.0.0" ]
