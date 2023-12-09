@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>SamanthaBot</title>
+    <style>
+
+        @font-face {
+            font-family: 'HM Alpha Mono';
+            src: url('./static/BBALP00A.TTF') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            background-repeat: no-repeat;
+            background-size: cover;
+            display: flex;
+            flex-direction: column;
+            font-family: "Open Sans", sans-serif;
+            background-color: white;
+            color: black;
+            padding: 12px;
+            --text-font-family: 'Inter', sans-serif;
+            --heading-font-family: 'HM Alpha Mono', sans-serif;    
+        } 
+
+        h1 {
+            font-family: var(--heading-font-family);
+            }
+
+        button {
+            display: flex;
+            text-align: center;
+            background: rgb(210, 207, 210);
+            color: black;
+            cursor: pointer;
+            border: 2px solid rgb(7, 7, 7);
+            border-radius: 5px;
+            padding: 8px 16px;
+            box-shadow: 2px 2px 0 0 black,
+            4px 4px 0 0 white;
+            transition-duration: 200ms;
+            font-family: 'Press Start 2P', cursive;
+            margin-bottom: 16px;
+            margin-top: 8px;
+        }
+
+            button:hover {
+            box-shadow: 3px 3px black, 6px 6px 0 0 white;
+            transform: translate(-2px, 2px);
+        }
+
+            form {
+                margin-top: 16px;
+            }
+
+            input[type="text"] {
+            background-color: #444;
+            color: rgb(231, 224, 224);
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+            input[type="text"]:focus {
+            outline: none;
+        }
+
+            label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"] {
+            background-color: #9f9c9c;
+            color:black;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            width: 25%;
+            height: 100px;
+            margin-bottom: 8px;
+            margin-top: 8px;
+        }
+
+
+        .response {
+            background-color: rgb(96, 122, 109);
+            color: rgb(0, 0, 0);
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+            min-height: 30px;
+            overflow-wrap: break-word;
+        }
+
+
+            #submit-btn {
+            display: flex;
+            text-align: center;
+            background: rgb(210, 207, 210);
+            color: rgb(7, 7, 7);
+            cursor: pointer;
+            border: 2px solid rgb(7, 7, 7);
+            border-radius: 5px;
+            padding: 8px 16px;
+            box-shadow: 2px 2px 0 0 black,
+            4px 4px 0 0 white;
+            transition-duration: 200ms;
+            font-family: 'Press Start 2P', cursive;
+            margin-bottom: 8px;
+            margin-top: 8px;
+        }
+
+            #submit-btn:hover {
+            box-shadow: 3px 3px black, 6px 6px 0 0 white;
+            transform: translate(-2px, 2px);
+        }
+
+        #submit-btn:disabled {
+            background: grey;
+        }
+
+        .response-container {
+            margin-top: 16px;
+            margin-bottom: 16px;
+        }
+
+
+        .user-input {
+            background-color: #9f9c9c;
+            color: black;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+            min-height: 30px;
+            overflow-wrap: break-word;
+            margin-top: 8px;
+        }
+
+
+        .loading {
+
+                margin-top: 8px
+
+        }
+
+
+        .conversation-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+
+        #conversation-container {
+            max-width: 800px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+
+        a {
+            color: white;
+            cursor: pointer;
+        }
+
+        .response a {
+            color: rgb(49, 38, 25);
+        }
+
+
+        @keyframes typewriter {
+            from {
+                width: 0;
+            }
+            to {
+                width: 100%;
+            }
+        }
+
+        .typewriter {
+            overflow: hidden;
+            white-space: nowrap;
+            animation: typewriter 1s steps(50, end) forwards;
+        }
+
+        p {
+            font-family: var(--text-font-family);
+        }
+
+    </style>
+     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body style="background-color: white; color: black; padding: 12px; font-family: 'Press Start 2P', cursive;">
+
+    <h1>SamanthaBot&#129501;&#127996;&#8205;&#9792;&#65039;</h1>
+    <div class="conversation-wrapper">
+        <div id="conversation-container"></div>
+    </div>
+    <form>
+        <label for="input"><p><b>How can I help you today?</b></p></label>
+        <input type="text" name="input" id="input">
+        <div id="warning" style="display:none;color:red;margin-top: 8px; margin-bottom: 8px; font-size: small;">&#9888;&#65039;Please remove email/street addresses.</div>
+        <input type="submit" value="Submit" id="submit-btn">
+    </form>
+    
+
+    <div class="loading" style="display:none;"><p><b>Thinking...&#129300;</b></p></div>
+
+
+    <section id="try-again">
+        <a href="http://127.0.0.1:8008/">
+            <button class="try-button"><b>New chat</b></button>
+        </a>
+    </section>
+
+
+</body>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
+<script>
+
+    const fithEle = document.getElementById('try-again')
+    fithEle.style.display = 'none'
+
+    // $(document).ready(function() {
+    //     var emailRegex = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+    //     var addressRegex = /\d+ [\w\s]{1,20}(street|st|drive|dr|avenue|ave|road|rd|rue|boulevard|avenue|chemin)\.?/i;
+    //     var warningDiv = document.getElementById('warning');
+    //     var submitBtn = document.getElementById('submit-btn');
+
+    //     document.getElementById('input').addEventListener('input', function(e) {
+    //         if (emailRegex.test(e.target.value) || addressRegex.test(e.target.value)) {
+    //             warningDiv.style.display = 'block';
+    //             submitBtn.disabled = true;
+    //         } else {
+    //             warningDiv.style.display = 'none';
+    //             submitBtn.disabled = false;
+    //         }
+    //     });
+    // });
+
+    function makeLinksClickable(text) {
+        var urlPattern = /((https?:\/\/)|(www\.))[^<\s]+/ig;
+        return text.replace(urlPattern, function(match) {
+            if (match.slice(-1) === '.') {
+                match = match.slice(0, -1);
+            }
+            var cleanedUrl = cleanUrlPatterns(match);
+            var prefix = /^https?:\/\//.test(cleanedUrl) ? '' : 'http://';
+            return '<a href="' + prefix + cleanedUrl + '" target="_blank">' + cleanedUrl + '</a>';
+        });
+    }
+
+
+    function cleanUrlPatterns(url) {
+        var patterns = [
+            /(%3C\/p%3E|<\/p>|<\/li>|<\/p><\/li>|\.<\/p><\/li>|<\/p><\/li>\?docs=true|<\/p>\?docs=true)\?docs=true/g,
+            /\.?support=true/g,
+            /(\.)(\?docs=true)/g,
+            /(\.)(\?support=true)/g,
+            /(%3C(\/?[a-z]+)[^%]*%3E)/ig,
+            /<\/p><\/li>/g,
+            /<\/p>/g,
+            /<\/li>/g,
+            /<\p>/g,
+            /<\li>/g,
+            /<p>/g,
+            /<li>/g,
+            /\.$/
+        ];
+
+        patterns.forEach(function (pattern) {
+            url = url.replace(pattern, '');
+        });
+
+        return url;
+    }
+
+
+    function scrollToBottom() {
+        var conversationContainer = document.getElementById('conversation-container');
+        conversationContainer.scrollTop = conversationContainer.scrollHeight;
+    }
+
+
+    function typewriterEffect(chatbot_output, response_div, callback) {
+        let i = 0;
+        let isTag = false;
+        let text = "";
+
+        function typeNextChar() {
+            if (i < chatbot_output.length) {
+                let char = chatbot_output.charAt(i);
+                i++;
+
+                if (char === "<") {
+                    isTag = true;
+                } else if (char === ">") {
+                    isTag = false;
+                }
+
+                text += char;
+                response_div.innerHTML = text;
+
+                if (isTag) {
+                    setTimeout(typeNextChar, 5);
+                } else {
+                    setTimeout(typeNextChar, 5);
+                }
+            } else {
+                if (typeof callback === "function") {
+                    callback();
+                }
+            }
+        }
+
+        typeNextChar();
+    }
+
+    function makeLinksOpenInNewTab(input) {
+        var dom = new DOMParser().parseFromString(input, 'text/html');
+        var links = dom.getElementsByTagName('a');
+        for(var i=0; i<links.length; i++) {
+            links[i].setAttribute('target', '_blank');
+        }
+        return dom.body.innerHTML;
+    }
+
+
+    function updateConversation(user_input, chatbot_output) {
+        var response_container = document.createElement("div");
+        response_container.classList.add("response-container");
+
+        var user_input_div = document.createElement("div");
+        user_input_div.classList.add("user-input");
+        user_input_div.innerHTML = user_input;
+
+        var response_div = document.createElement("div");
+        response_div.classList.add("response");
+
+        response_container.appendChild(user_input_div);
+        response_container.appendChild(response_div);
+        document.getElementById("conversation-container").appendChild(response_container);
+
+        typewriterEffect(chatbot_output, response_div, scrollToBottom);
+    }
+
+
+    function updateUrls(text) {
+        var urlPattern = /((https?:\/\/)|(www\.))[^\s]+/ig;
+        return text.replace(urlPattern, function(match) {
+            var cleanedUrl = cleanUrlPatterns(match);
+            var prefix = /^https?:\/\//.test(cleanedUrl) ? '' : 'http://';
+            return '<a href="' + prefix + cleanedUrl + '" target="_blank">' + cleanedUrl + '</a>';
+        });
+    }
+
+
+    $(function() {
+        // Generate a UUID for the user
+        var user_id = uuid.v4();
+        // Store the user_id in local storage or a cookie for future use
+        localStorage.setItem('user_id', user_id);
+        $('form').submit(function(event) {
+            event.preventDefault();
+            var input_text = $('#input').val();
+            $('.loading').show();
+            $('#submit-btn').prop('disabled', true);
+            $.ajax({
+                type: 'POST',
+                url: ' http://127.0.0.1:8008/gpt',
+                data: JSON.stringify({user_input: input_text, user_id: user_id}),
+                contentType: 'application/json',
+
+                success: function(response) {
+                    $('.loading').hide();
+                    var user_input = input_text;
+
+
+                    // Create a Showdown converter
+                    var conv = new showdown.Converter({simpleLineBreaks: true, excludeTrailingPunctuationFromURLs: true, smartIndentationFix: true});
+
+                    // Convert chatbot_output to HTML using Showdown
+                    var chatbot_output = conv.makeHtml(response.output);
+                    
+                    // Make links clickable
+                    chatbot_output = makeLinksClickable(chatbot_output);
+
+                    //Make links open in new tab
+                    chatbot_output = makeLinksOpenInNewTab(chatbot_output);
+
+                    updateConversation(user_input, chatbot_output);
+                    $('#input').val('');
+                },
+
+                error: function(jqXHR, textStatus, errorThrown) {
+                    $('.loading').hide();
+                    // Parse the error response (which should be JSON)
+                    var errorResponse = JSON.parse(jqXHR.responseText);
+                    var errorMessage = errorResponse.detail;
+                    // Display the error message to the user
+                    alert(errorMessage);
+                },
+
+
+                complete: function() {
+                    $('#submit-btn').prop('disabled', false);
+                }
+            });
+        });
+    });
+
+    fithEle.style.display = 'flex'
+</script>
+</html>

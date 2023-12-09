@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+        {{- if .Values.datadog }}
+        {{- include "knowledge-bot.datadogLabels" (dict "service" .Release.Name "env" .Values.env "version" .Values.image.tag ) | nindent 8 }}
+        {{- end }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ .Release.Name }}
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{ .Release.Name }}
+          image: {{ .Values.image.name }}:{{ .Values.image.tag | default "latest" }}
+          ports:
+            - containerPort: {{ .Values.port }}
+              name: "{{ .Release.Name }}"
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: knowledge-bot-stg-volume
+              mountPath: "/app/.env"
+              subPath: .env
+          livenessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: {{ .Values.livenessProbePath }}
+              port: {{ .Values.port }}
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 25
+          readinessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: {{ .Values.readinessProbePath }}
+              port: {{ .Values.port }}
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 3
+            timeoutSeconds: 30
+          env:
+            {{- toYaml .Values.environment | trim | nindent 12 }}
+          {{- if .Values.datadog }}
+            - name: DD_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_SERVICE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: knowledge-bot-stg-volume
+          secret:
+            secretName: env-file
+            optional: false
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecret | quote }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>        
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+        <title>SearchBot</title>
+    <script>
+
+            function formatDate(isoString) {
+                    const date = new Date(isoString);
+                    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + 
+                        ' at ' + 
+                        date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+            async function performSearch() {
+                const query = document.getElementById('searchQuery').value;
+                const response = await fetch('http://127.0.0.1:8800/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const resultsContainer = document.getElementById('results');
+                resultsContainer.innerHTML = ''; // Clear previous results
+                const seenTitles = new Set(); // To track unique titles
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.hits && result.hits.length > 0) {
+                        result.hits.forEach(hit => {
+                            const currentTitle = hit.document.title;
+                            if (!seenTitles.has(currentTitle)) {
+                                seenTitles.add(currentTitle); // Add title to the Set
+
+                                // Create an element for the title
+                                const titles = document.createElement('div');
+                                if (hit.highlight && hit.highlight.title) {
+                                    titles.innerHTML = hit.highlight.title.snippet; // Use highlight if available
+                                } else {
+                                    titles.textContent = currentTitle; // Use plain title otherwise
+                                }
+
+                                // Create a link for the title
+                                const link = document.createElement('a');
+                                link.href = hit.document.source; // Link to the source
+                                link.target = '_blank'; // Open in a new tab
+
+                                // Create an element for the title
+                                const title = document.createElement('div');
+                                if (hit.highlight && hit.highlight.title) {
+                                    title.innerHTML = hit.highlight.title.snippet; // Use highlight if available
+                                } else {
+                                    title.textContent = currentTitle; // Use plain title otherwise
+                                }
+                                link.appendChild(title);
+
+                                // Create an element for the last-updated date
+                                const lastUpdated = document.createElement('div');
+                                lastUpdated.textContent = `Last Updated: ${formatDate(hit.document['last-updated'])}`;
+                                lastUpdated.style.fontSize = 'small';
+                                lastUpdated.style.marginTop = '5px';
+                                link.appendChild(lastUpdated);
+
+                                // Append the link to the results container
+                                resultsContainer.appendChild(link);
+                                    }
+                        });
+                    } else {
+                        resultsContainer.textContent = 'No results found';
+                    }
+                } else {
+                    resultsContainer.textContent = 'Error in fetching results';
+                }
+            }
+    </script>
+</head>
+<body>
+    <h1>Ledger Help Center</h1>
+    <input type="text" id="searchQuery" placeholder="Enter your search term">
+    <button onclick="performSearch()">Search</button>
+    <div id="results"></div>
+</body>
+</html>

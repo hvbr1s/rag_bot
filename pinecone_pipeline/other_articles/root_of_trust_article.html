@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta content="https://www.ledger.com/a-closer-look-into-ledger-security-the-root-of-trust" name="source"/>
+	<meta content="blog" name="source-type"/>
+	<meta content="en-us" name="locale"/>
+	<meta content="N/A" name="zd-article-id"/>
+	<meta content="A CLOSER LOOK INTO LEDGER SECURITY: THE ROOT OF TRUST" name="title"/>
+	<meta content="public" name="classification"/>
+</head>
+<body>
+	<p>
+		When receiving their Ledger device, most want to immediately start using it. One will notice, however, that there is no security seal on the packaging to show that this is a legitimate Ledger device.
+
+    It is paramount to ensure that your device is genuine. An attacker could otherwise have replaced a genuine device by a fake and backdoored one. In this case, he would be able to access to your crypto assets afterwards. Anti-tampering seals (or holographic seals) can give you a false sense of security. Not only are they trivial to clone, but it is also easy to open and close a package without damaging the seal.
+    
+    As cryptocurrencies are a high value target for attackers, a real security mechanism is required to make sure that your device is a genuine one.
+    At Ledger, we use a cryptographic mechanism to check if your device is a genuine Ledger hardware wallet.
+    
+    We use a validation process based on a Root of Trust.
+    
+    WHAT IS AN ATTESTATION AND HOW DOES IT WORK?
+    The attestation is a validation process that can check the genuineness of Ledger devices.
+    
+    In simple words, every time you use a Ledger device to process a critical action at the firmware level (such as updating the OS, installing or removing apps), an HSM (secure server) will send a challenge to the device (a randomly generated number). This means it is requesting the device to prove its genuineness. The device can prove that it is genuine by providing a correct signature for the challenge.     
+    
+    If the server is able to verify the signature of the device, it validates its genuineness and allows the connection. If this is not the case, it blocks it instead.
+    
+    Let’s take a closer look into it.
+    
+    SETTING UP AN ATTESTATION FOR LEDGER DEVICES DURING MANUFACTURING:
+    To be able to make use of a Root of Trust, the following steps take place during the manufacturing of a device:
+    
+    
+    Each Ledger device generates a unique pair of keys: a public key and a private key. The private key is kept secret to the device only and is not communicated. The same principle is used for your cryptocurrency accounts.
+    
+    The device sends its public key to Ledger’s HSM (secure server).
+    
+    Our HSM (secure server) signs the public key with the Ledger Root of Trust and sends it back to the device. This signed public key is the device’s attestation. It is stored inside the device and cannot be extracted.
+    
+    This attestation allows Ledger’s HSM  to verify if the device is genuine afterwards.
+    
+    USING THE ROOT OF TRUST AFTER MANUFACTURING:
+    When using the Ledger device for the first time, there will be a verification of its genuineness.
+    
+    Here is how it works:
+    
+    
+    Ledger’s HSM (secure server) sends a challenge to the Ledger device.
+    The Ledger device signs the challenge it receives using its private key. This signature is sent back to Ledger’s HSM along with the attestation (signed public key).
+    
+    Ledger’s server will then be able to authenticate the Ledger device doing the following:
+    Verify the attestation of the device (that the given public key is actually signed by the HSM)
+    Verify the challenge with the attestation.
+    
+    Ledger genuine deviceIf the device’s signature is confirmed as correct by the HSM, the device will be established as genuine, and will be allowed to access the Ledger Live manager.
+    
+    
+    Ledger device not genuine
+    Otherwise, a warning message is shown indicating the device is not genuine and the Ledger Live manager will be inaccessible.
+    
+    This authentication procedure protects Ledger users against counterfeited Ledger devices.
+    
+    WHEN DO WE USE A ROOT OF TRUST TO CHECK IF A DEVICE IS GENUINE?:
+    
+    
+    When you are connecting your device to Ledger Live for the first time during the genuine check (see image above)
+    Each time you are accessing the Ledger Live manager (Or Ledger Manager chrome application)
+    Every time you install an application from the Ledger Live manager  (Or Ledger Manager Chrome application)
+    Each time you are updating your firmware.
+    None of the previous mentioned can be performed with a counterfeited device.
+    
+    WHAT IF LEDGER DID NOT MAKE USE OF A ROOT OF TRUST ?
+    If Ledger devices did not use the attestation mechanism, anyone could tamper with a device to turn it into a tool for stealing your crypto assets. Equally, one could create a completely different device that looks completely identical to a Ledger Nano S, and load this clone with corrupt software designed to steal crypto assets from its users.
+    
+    A “security” seal is nothing compared to a cryptographic mechanism. It’s easy to counterfeit, and gives a false sense of security. If it is possible for hackers to tamper with or mimic a device in such a way that allows them to steal crypto assets, it would be a much easier task to replicate one of these stickers, let alone removing one and sticking it back on again.
+    
+    CONCLUSION
+    Leveraging a Root of Trust for our hardware wallets is essential for security. This genuineness mechanism allows us to block fake devices pretending to be real Ledger hardware wallets. Furthermore, you will be able to update your device without the risk of a rogue firmware or app being installed. This helps protect your crypto assets.
+  </p>
+</body>
+</html>
