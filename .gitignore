@@ -7,3 +7,6 @@ __pycache__/
 *.DS_Store
 trashbin/
 **/localizing_url_list.py
+system_prompt_eng.txt
+system_prompt_fr.txt
+Dockerfile
