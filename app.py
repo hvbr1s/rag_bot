@@ -47,7 +47,7 @@ class Query(BaseModel):
 openai.api_key=os.environ['OPENAI_API_KEY']
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
-index_name = 'database'
+index_name = 'prod'
 index = pinecone.Index(index_name)
 
 # Initialize Cohere
@@ -163,7 +163,7 @@ async def generic_exception_handler(request, exc):
     )
 
 # Define supported locales for data retrieval
-SUPPORTED_LOCALES = {'eng', 'fr'}
+SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
 # Define RAG route
 @app.post('/gpt')
@@ -226,7 +226,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
 
-            # Classify the query with Cohere
+            # Categorize the query with Cohere
             try:
                 res = co.classify(
                     inputs=[user_input],
@@ -245,20 +245,40 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 # Define context box
                 contexts = []
                 
-                # Prepare embeddings
-                response = co.embed(
-                    texts=[user_input],
-                    model='embed-english-v3.0',
-                    input_type='search_document'
-                )
-                xq = response.embeddings
+                # Prepare Cohere embeddings 
+                try:
+
+                    # Choose the model based on the locale
+                    model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
+
+                    # Call the embedding function
+                    res_embed = co.embed(
+                        texts=[user_input],
+                        model=model,
+                        input_type='search_query'
+                    )
+
+                    # Grab the embeddings from the response object
+                except Exception as e:
+                    print(f"Embedding failed: {e}")
+
+                xq = res_embed.embeddings
 
                 try:
+                    # Translation dictionary
+                    translations = {
+                        'ru': '\n\nУзнайте больше на',
+                        'fr': '\n\nPour en savoir plus'
+                    }
+
+                    # Default to English if locale not in dictionary
+                    learn_more_text = translations.get(locale, '\n\nLearn more at')
+
                     # Pulls 7 chunks from Pinecone
                     res_query = index.query(xq, top_k=7, namespace=locale, include_metadata=True)
 
                     # Rerank chunks using Cohere
-                    docs = {x["metadata"]['text'] + "\nLearn more at: " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+                    docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
                     rerank_docs = co.rerank(
                         query=query, 
                         documents=docs.keys(), 
@@ -295,6 +315,8 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
                     augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant: " + "\n"
+                elif locale == 'ru':
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: " + user_input + "\n" + "Краткий ответ ассистента: " + "\n"
                 else:
                     augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant's short answer: " + "\n"
 
