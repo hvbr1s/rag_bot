@@ -22,6 +22,7 @@ import time
 import cohere
 import asyncio
 from typing import NamedTuple
+import sqlite3  
 
 
 # Initialize environment variables
@@ -67,6 +68,20 @@ def load_examples():
         raise HTTPException(status_code=500, detail="Examples file not found!")
 
 examples = load_examples()
+
+# # Create In-Memory SQLite DB
+# # Connect to an in-memory SQLite database
+# conn = sqlite3.connect(':memory:')  # This creates a new database in RAM
+# cursor = conn.cursor()
+
+# # Create table
+# cursor.execute('''
+#     CREATE TABLE category_data (
+#         id INTEGER PRIMARY KEY,
+#         category TEXT NOT NULL,
+#         timestamp DATETIME NOT NULL
+#     )
+# ''')
 
 # Email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -351,7 +366,25 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             }
 
             print("\n\n" + response + "\n\n")
-            return {'output': response, 'category': category, 'time': timestamp}
+
+            # # Prepare data to be written to db
+            # json_data = json.dumps({"category": category, "time": timestamp})
+            # # Commit to db
+            # # Parse JSON
+            # data = json.loads(json_data)
+            # category = data['category']
+            # timestamp = datetime.strptime(data['time'], '%B %d, %Y %H:%M:%S')
+            # # Insert data
+            # cursor.execute('INSERT INTO category_data (category, timestamp) VALUES (?, ?)', (category, timestamp))
+
+            # # Commit changes
+            # conn.commit()
+
+            # # Querying the database to verify the insertion (optional)
+            # cursor.execute('SELECT * FROM category_data')
+            # print(cursor.fetchall())
+
+            return {'output': response}
     
         except ValueError as e:
             print(e)
