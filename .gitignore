@@ -9,4 +9,6 @@ trashbin/
 **/localizing_url_list.py
 system_prompt_eng.txt
 system_prompt_fr.txt
+classifier_prompt.txt
 Dockerfile
+terraform/
