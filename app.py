@@ -225,6 +225,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
+            timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
 
             # Categorize the query with Cohere
             try:
@@ -350,7 +351,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             }
 
             print("\n\n" + response + "\n\n")
-            return {'output': response, 'category': category}
+            return {'output': response, 'category': category, 'time': timestamp}
     
         except ValueError as e:
             print(e)
