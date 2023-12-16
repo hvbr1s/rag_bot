@@ -12,3 +12,5 @@ system_prompt_fr.txt
 classifier_prompt.txt
 Dockerfile
 terraform/
+argocd/
+tests/
