@@ -3,7 +3,7 @@ import json
 from dotenv import main
 from datetime import datetime
 import pinecone
-import openai
+from openai import OpenAI
 from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, TypeAdapter
@@ -29,6 +29,7 @@ import sqlite3
 main.load_dotenv()
 
 # Initialize backend
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -45,7 +46,6 @@ class Query(BaseModel):
     user_locale: str | None = None
 
 # Initialize Pinecone
-openai.api_key=os.environ['OPENAI_API_KEY']
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
@@ -263,7 +263,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Prepare Cohere embeddings 
                 try:
-
                     # Choose the model based on the locale
                     model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
 
@@ -274,10 +273,9 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                         input_type='search_query'
                     )
 
-                    # Grab the embeddings from the response object
+                # Grab the embeddings from the response object
                 except Exception as e:
                     print(f"Embedding failed: {e}")
-
                 xq = res_embed.embeddings
 
                 try:
@@ -344,16 +342,15 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
-                res = openai.ChatCompletion.create(
-                    temperature=0.0,
-                    model='gpt-4',
-                    #model='gpt-4-1106-preview',
-                    messages=[
-                        {"role": "system", "content": primer},
-                        {"role": "user", "content": augmented_query}
-                    ]
-                )             
-                reply = res['choices'][0]['message']['content']
+                res = client.chat.completions.create(temperature=0.0,
+                model='gpt-4',
+                #model='gpt-4-1106-preview',
+                messages=[
+                    {"role": "system", "content": primer},
+                    {"role": "user", "content": augmented_query}
+                ])  
+                print(res)           
+                reply = res.choices[0].message.content
                 return reply
             
             # Start RAG

@@ -1,6 +1,5 @@
 ipython==8.12.0
-langchain
-openai
+openai==1.4.0
 pinecone-client
 python-dotenv==1.0.0
 uuid

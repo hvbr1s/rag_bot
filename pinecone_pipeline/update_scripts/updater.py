@@ -4,13 +4,15 @@ import os
 from os import path
 import shutil
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 from tqdm.auto import tqdm
 import pinecone
 from openai.error import RateLimitError
 
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+
 
 def read_json_file(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -45,10 +47,10 @@ def run_updater(json_file_path:str = None, index_name = 'prod'):
         texts = [x['text'] for x in meta_batch]
         
         try:
-            res = openai.Embedding.create(input=texts, engine=embed_model)
+            res = client.embeddings.create(input=texts, engine=embed_model)
         except RateLimitError:
             time.sleep(240)
-            res = openai.Embedding.create(input=texts, engine=embed_model)
+            res = client.embeddings.create(input=texts, engine=embed_model)
 
         embeds = [record['embedding'] for record in res['data']]
         

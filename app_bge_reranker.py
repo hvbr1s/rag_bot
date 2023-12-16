@@ -3,7 +3,7 @@ import json
 from dotenv import main
 from datetime import datetime
 import pinecone
-import openai
+from openai import OpenAI
 from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, TypeAdapter
@@ -30,6 +30,7 @@ main.load_dotenv()
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 async def get_api_key(api_key_header: str = Depends(api_key_header)):
     if not api_key_header or api_key_header.split(' ')[1] != server_api_key:
@@ -42,7 +43,7 @@ class Query(BaseModel):
     user_locale: str | None = None
 
 # Initialize Pinecone
-openai.api_key=os.environ['OPENAI_API_KEY']
+
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
@@ -218,10 +219,8 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Define Retrieval (with re-ranking)
             async def retrieve(query, contexts=None):
-                res_embed = openai.Embedding.create(
-                    input=[user_input],
-                    engine=embed_model
-                )
+                res_embed = client.embeddings.create(input=[user_input],
+                engine=embed_model)
                 xq = res_embed['data'][0]['embedding']
 
                 # Pulls n chunks from Pinecone
@@ -274,15 +273,13 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
-                res = openai.ChatCompletion.create(
-                    temperature=0.0,
-                    model='gpt-4',
-                    #model="gpt-3.5-turbo-0613",
-                    messages=[
-                        {"role": "system", "content": primer},
-                        {"role": "user", "content": augmented_query}
-                    ]
-                )             
+                res = client.chat.completions.create(temperature=0.0,
+                model='gpt-4',
+                #model="gpt-3.5-turbo-0613",
+                messages=[
+                    {"role": "system", "content": primer},
+                    {"role": "user", "content": augmented_query}
+                ])             
                 reply = res['choices'][0]['message']['content']
                 return reply
             

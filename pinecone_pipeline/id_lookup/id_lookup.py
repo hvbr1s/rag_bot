@@ -1,11 +1,12 @@
 import os
 import json
-import openai
+from openai import OpenAI
 import pinecone
 from dotenv import load_dotenv
 
 # Load environment variables from a .env file
 load_dotenv()
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 def init_pinecone():
     """
@@ -37,9 +38,9 @@ def get_embedding(link, embed_model="text-embedding-ada-002"):
         raise EnvironmentError("OpenAI API key not set")
 
     # Set OpenAI API key
-    openai.api_key = openai_api_key
+    
     # Create embedding for the given link using the specified embedding model
-    res_embed = openai.Embedding.create(input=[link], engine=embed_model)
+    res_embed = client.embeddings.create(input=[link], engine=embed_model)
     # Return the embedding data from the response
     return res_embed['data'][0]['embedding']
 

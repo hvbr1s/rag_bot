@@ -2,7 +2,7 @@ import os
 import json
 from dotenv import main
 import pinecone
-import openai
+from openai import OpenAI
 from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -25,7 +25,7 @@ import time
 main.load_dotenv()
 
 #########Initialize backend API keys ######
-
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -40,7 +40,7 @@ class Query(BaseModel):
     user_id: str
 
 # Initialize Pinecone
-openai.api_key=os.environ['OPENAI_API_KEY']
+
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], enviroment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
@@ -174,10 +174,8 @@ async def react_description(query: Query, request: Request):
         try:
             # Define Retrieval
             async def retrieve(query, contexts=None):
-                res_embed = openai.Embedding.create(
-                    input=[user_input],
-                    engine=embed_model
-                )
+                res_embed = client.embeddings.create(input=[user_input],
+                engine=embed_model)
                 xq = res_embed['data'][0]['embedding']
                 res_query = index.query(xq, top_k=5, namespace="en-us", include_metadata=True)
                 
