@@ -54,19 +54,19 @@ index = pinecone.Index(index_name)
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
 
-# Initialize and load Cohere classifier categories
-Example = NamedTuple("Example", [("text", str), ("label", str)])
+# # Initialize and load Cohere classifier categories
+# Example = NamedTuple("Example", [("text", str), ("label", str)])
 
-def load_examples():
-    filecat = f'examples.json'
-    try:
-        with open(filecat, 'r') as file:
-            examples_list = json.load(file)
-            return [Example(**ex) for ex in examples_list]
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Examples file not found!")
+# def load_examples():
+#     filecat = f'examples.json'
+#     try:
+#         with open(filecat, 'r') as file:
+#             examples_list = json.load(file)
+#             return [Example(**ex) for ex in examples_list]
+#     except FileNotFoundError:
+#         raise HTTPException(status_code=500, detail="Examples file not found!")
 
-examples = load_examples()
+# examples = load_examples()
 
 # Email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -117,7 +117,7 @@ async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExc
 
 # Initialize user state and periodic cleanup function
 user_states = {}
-TIMEOUT_SECONDS = 1 * 25 * 60  # 25 minutes
+TIMEOUT_SECONDS = 1 * 10 * 60  # 10 minutes
 
 async def periodic_cleanup():
     while True:
@@ -250,24 +250,22 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             }
             ]
 
-            # Categorize the query with Cohere
-            try:
-                res = co.classify(
-                    inputs=[user_input],
-                    examples=examples,
-                )
-                prediction = res.classifications
-                category = prediction[0].predictions[0]
-            except Exception as e:
-                print(f"Classification failed: {e}")
-                category = 'Could not categorize'
-            print(category)
+            # # Categorize the query with Cohere
+            # try:
+            #     res = co.classify(
+            #         inputs=[user_input],
+            #         examples=examples,
+            #     )
+            #     prediction = res.classifications
+            #     category = prediction[0].predictions[0]
+            # except Exception as e:
+            #     print(f"Classification failed: {e}")
+            #     category = 'Could not categorize'
+            # print(category)
   
             ##################################
                        
             async def retrieve(query, contexts=None):
-                # Prepare context box
-                contexts = []
 
                 # Prepare Cohere embeddings 
                 try:
@@ -301,6 +299,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                     # Rerank chunks using Cohere
                     docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+                    print(docs)
                     rerank_docs = co.rerank(
                         query=query, 
                         documents=docs.keys(), 
@@ -310,6 +309,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     reranked = rerank_docs[0].document["text"]
 
                     # Construct the contexts
+                    contexts = []
                     contexts.append(reranked)
                     return contexts
 
@@ -341,19 +341,23 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     
                     You are SamanthaBot, an expert in cryptocurrency and helpful virtual assistant designed to support Ledger and technical queries through API integration. 
                     
-                    When a user asks any question about Ledger products or anything related to Ledger's ecosystem, you will ALWAYS use the "retrieve" tool initiate an API call to an external service.
+                    When a user asks any question about Ledger products or anything related to Ledger's ecosystem, you will ALWAYS use the "retrieve" tool to initiate an API call to an external service.
 
-                    Before utilizing your API retrieval tool, it's essential to first understand the user's issue. This requires asking follow-up questions. Here are key points to remember:
+                    Before utilizing your API retrieval tool, it's essential to first understand the user's issue. This requires asking follow-up questions. 
+                     
+                    Here are key points to remember:
 
                     1- Limit yourself to a maximum of 2 follow-up questions.
-                    2- Ensure the conversation doesn't exceed 3 exchanges between you and the user.
+                    2- Ensure the conversation doesn't exceed 3 exchanges between you and the user before calling your "retrieve" API tool.
                     3- Never request crypto addresses or transaction hashes/IDs.
-
+                    4- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
+                    5- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
+                   
                    After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your API tool. This approach helps maintain a smooth and effective conversation flow.
 
-                    ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
+                   ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
 
-                    If a user needs to contact Ledger Support, they can do so at https://support.ledger.com/
+                   If a user needs to contact Ledger Support, they can do so at https://support.ledger.com/
 
                     Never use your API tool when a user simply thank you or greet you!
 
@@ -370,7 +374,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     tools=tools,
                     tool_choice="auto"
                 )
-                print(res)
+                
                 # Extract reply content
                 if res.choices[0].message.content is not None:
                     reply = res.choices[0].message.content
@@ -383,6 +387,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                     # Extract query
                     function_call_query = tool_call_arguments["query"]
+                    print(function_call_query)
 
                     # Use this extracted query to call the retrieve function
                     retrieved_context = await retrieve(function_call_query)
