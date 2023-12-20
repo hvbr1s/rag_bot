@@ -387,7 +387,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                     # Extract query
                     function_call_query = tool_call_arguments["query"]
-                    print(function_call_query)
 
                     # Use this extracted query to call the retrieve function
                     retrieved_context = await retrieve(function_call_query)
