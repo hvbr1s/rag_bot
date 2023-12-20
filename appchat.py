@@ -352,7 +352,8 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     3- Never request crypto addresses or transaction hashes/IDs.
                     4- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
                     5- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
-                   
+                    6- For issues involving a swap, it's crucial to ask which swap service the user uused (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+                     
                    After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your API tool. This approach helps maintain a smooth and effective conversation flow.
 
                    ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
