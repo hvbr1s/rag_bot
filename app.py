@@ -49,7 +49,7 @@ pinecone.whoami()
 index_name = 'prod'
 index = pinecone.Index(index_name)
 
-# Initilize embedding model
+# Initialize OpenAI embedding model
 embed_model = "text-embedding-ada-002"
 
 # Initialize Cohere
@@ -62,13 +62,15 @@ def find_emails(text):
     return re.findall(email_pattern, text)
 
 # Set up address filters:
-ETHEREUM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b'
+EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b'
 BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
 LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
 DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
 XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
 COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
 SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
+CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
+
 
 # Initialize tokenizer and create length function
 tokenizer = tiktoken.get_encoding('cl100k_base')
@@ -193,11 +195,12 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             return {'output': "I'm sorry, I did quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
   
 
-    if re.search(ETHEREUM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
+    if re.search(EVM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(BITCOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(LITECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(DOGECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(COSMOS_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
+           re.search(CARDANO_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(SOLANA_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(XRP_ADDRESS_PATTERN, user_input, re.IGNORECASE):
         if locale == 'fr':
@@ -241,10 +244,11 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                         input_type='search_query'
                     )
 
-                    # Grab the embeddings from the response object
+                    
                 except Exception as e:
                     print(f"Embedding failed: {e}")
 
+                # Grab the embeddings from the response object
                 xq = res_embed.embeddings
 
                 # Prepare re-ranking with Cohere
@@ -264,6 +268,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     # Rerank chunks using Cohere
                     docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
                     reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
+                    print(reranker_model)
                     rerank_docs = co.rerank(
                         query=query, 
                         documents=docs.keys(), 
@@ -329,16 +334,21 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 except Exception as e:
                     print(f"OpenAI completion failed: {e}")
-
+                    
                     # Fallback on Cohere chat model:
-                    res = co.chat(
-                        message=augmented_query,
-                        model='command',
-                        preamble_override=primer,
-                        temperature=0.0,
-                    )
-                    reply = res.text
-                    return reply
+                    try:
+
+                        res = co.chat(
+                            message=augmented_query,
+                            model='command',
+                            preamble_override=primer,
+                            temperature=0.0,
+                        )
+                        reply = res.text
+                        return reply
+                    
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
             
             # Start RAG
             response = await rag(augmented_query)
