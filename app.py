@@ -313,17 +313,32 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
-                res = openai.ChatCompletion.create(
-                    temperature=0.0,
-                    model='gpt-4',
-                    #model='gpt-4-1106-preview',
-                    messages=[
-                        {"role": "system", "content": primer},
-                        {"role": "user", "content": augmented_query}
-                    ]
-                )             
-                reply = res['choices'][0]['message']['content']
-                return reply
+
+                try: 
+                    res = openai.ChatCompletion.create(
+                        temperature=0.0,
+                        model='gpt-4',
+                        #model='gpt-4-1106-preview',
+                        messages=[
+                            {"role": "system", "content": primer},
+                            {"role": "user", "content": augmented_query}
+                        ]
+                    )             
+                    reply = res['choices'][0]['message']['content']
+                    return reply
+                
+                except Exception as e:
+                    print(f"OpenAI completion failed: {e}")
+
+                    # Fallback on Cohere chat model:
+                    res = co.chat(
+                        message=augmented_query,
+                        model='command',
+                        preamble_override=primer,
+                        temperature=0.0,
+                    )
+                    reply = res.text
+                    return reply
             
             # Start RAG
             response = await rag(augmented_query)
