@@ -3,7 +3,7 @@ import json
 from dotenv import main
 from datetime import datetime
 import pinecone
-from openai import OpenAI
+import openai
 from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, TypeAdapter
@@ -14,22 +14,18 @@ from slowapi.middleware import SlowAPIMiddleware
 from fastapi import BackgroundTasks
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-from cohere.responses.classify import Example
 from nostril import nonsense
 import tiktoken
 import re
 import time
 import cohere
 import asyncio
-from typing import NamedTuple
-import sqlite3  
 
 
 # Initialize environment variables
 main.load_dotenv()
 
 # Initialize backend
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -39,6 +35,7 @@ async def get_api_key(api_key_header: str = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return api_key_header
 
+
 # Define query class
 class Query(BaseModel):
     user_input: str
@@ -46,42 +43,18 @@ class Query(BaseModel):
     user_locale: str | None = None
 
 # Initialize Pinecone
+openai.api_key=os.environ['OPENAI_API_KEY']
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
 index = pinecone.Index(index_name)
 
+# Initilize embedding model
+embed_model = "text-embedding-ada-002"
+
 # Initialize Cohere
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
-
-# Initialize and load Cohere classifier categories
-Example = NamedTuple("Example", [("text", str), ("label", str)])
-
-def load_examples():
-    filecat = f'examples.json'
-    try:
-        with open(filecat, 'r') as file:
-            examples_list = json.load(file)
-            return [Example(**ex) for ex in examples_list]
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Examples file not found!")
-
-examples = load_examples()
-
-# # Create In-Memory SQLite DB
-# # Connect to an in-memory SQLite database
-# conn = sqlite3.connect(':memory:')  # This creates a new database in RAM
-# cursor = conn.cursor()
-
-# # Create table
-# cursor.execute('''
-#     CREATE TABLE category_data (
-#         id INTEGER PRIMARY KEY,
-#         category TEXT NOT NULL,
-#         timestamp DATETIME NOT NULL
-#     )
-# ''')
 
 # Email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -107,18 +80,21 @@ def tiktoken_len(text):
     return len(tokens)
 
 async def get_user_id(request: Request):
-    try:
-        body = TypeAdapter(Query).validate_python(await request.json())
-        user_id = body.user_id
-        return user_id
-    except Exception as e:
-        return get_remote_address(request)
+   try:
+       body = TypeAdapter(Query).validate_python(await request.json())
+       user_id = body.user_id
+       return user_id
+   except Exception as e:
+       return get_remote_address(request)
 
 # Define FastAPI app
 app = FastAPI()
 
 # Define rate-limiter
-limiter = Limiter(key_func=get_user_id)
+def get_user_id_wrapper(request: Request):
+   return get_user_id(request)
+
+limiter = Limiter(key_func=get_user_id_wrapper)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -132,20 +108,19 @@ async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExc
 
 # Initialize user state and periodic cleanup function
 user_states = {}
-TIMEOUT_SECONDS = 1 * 25 * 60  # 25 minutes
+TIMEOUT_SECONDS = 1 * 10 * 60  # 10 minutes
 
 async def periodic_cleanup():
     while True:
         await cleanup_expired_states()
         await asyncio.sleep(TIMEOUT_SECONDS)
 
-# Invoke periodic cleanup
+# Improved startup event to use asyncio.create_task for the continuous background task
 @app.on_event("startup")
 async def startup_event():
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(periodic_cleanup)
+    asyncio.create_task(periodic_cleanup())
 
-# Handle cleanup crashes gracefully
+# Enhanced cleanup function with improved error logging
 async def cleanup_expired_states():
     try:
         current_time = time.time()
@@ -154,9 +129,13 @@ async def cleanup_expired_states():
             if current_time - state['timestamp'] > TIMEOUT_SECONDS
         ]
         for user_id in expired_users:
-            del user_states[user_id]
+            try:
+                del user_states[user_id]
+                print("User state deleted!")
+            except Exception as e:
+                print(f"Error during cleanup for user {user_id}: {e}")
     except Exception as e:
-        print(f"Error during cleanup: {e}")
+        print(f"General error during cleanup: {e}")
 
 
 # Define FastAPI endpoints
@@ -206,10 +185,12 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
     if not user_input or nonsense(user_input):
         print('Nonsense detected!')
-        if locale == "fr":
+        if locale == 'fr':
             return {'output': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger."}
+        if locale == 'ru':
+            return {'output': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger."}
         else: 
-            return {'output': "I'm sorry, I cannot understand your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
+            return {'output': "I'm sorry, I did quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
   
 
     if re.search(ETHEREUM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
@@ -221,18 +202,18 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
            re.search(XRP_ADDRESS_PATTERN, user_input, re.IGNORECASE):
         if locale == 'fr':
             return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau."}
+        if locale == 'ru':
+            return {'output':"Извините, но я не могу помочь с вопросами, которые включают адреса счетов криптовалюты. Пожалуйста, удалите адрес из вашего запроса и напишите ваш запрос еще раз."}
         else:
             return {'output':"I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"}
     
     if re.search(email_pattern, user_input):
         if locale == 'fr':
-            return {
-            'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."
-                }
+            return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."}
+        if locale == 'ru':
+            return {'output':"Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова."}
         else:
-            return{
-                'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."
-            }
+            return{'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."}
     
     else:
         
@@ -240,21 +221,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
-            timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
-
-            # Categorize the query with Cohere
-            try:
-                res = co.classify(
-                    inputs=[user_input],
-                    examples=examples,
-                )
-                prediction = res.classifications
-                category = prediction[0].predictions[0]
-            except Exception as e:
-                print(f"Classification failed: {e}")
-                category = 'Could not categorize'
-            print(category)
-  
+            
             #############
                        
             async def retrieve(query, contexts=None):
@@ -263,6 +230,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Prepare Cohere embeddings 
                 try:
+
                     # Choose the model based on the locale
                     model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
 
@@ -273,11 +241,13 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                         input_type='search_query'
                     )
 
-                # Grab the embeddings from the response object
+                    # Grab the embeddings from the response object
                 except Exception as e:
                     print(f"Embedding failed: {e}")
+
                 xq = res_embed.embeddings
 
+                # Prepare re-ranking with Cohere
                 try:
                     # Translation dictionary
                     translations = {
@@ -293,11 +263,12 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                     # Rerank chunks using Cohere
                     docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+                    reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
                     rerank_docs = co.rerank(
                         query=query, 
                         documents=docs.keys(), 
                         top_n=2, 
-                        model="rerank-english-v2.0"
+                        model=reranker_model
                     )
                     reranked = rerank_docs[0].document["text"]
 
@@ -328,11 +299,11 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: '" + user_input + "'" + "\n" + "Assistant: " + "\n"
+                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant: " + "\n"
                 elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: '" + user_input + "'" + "\n" + "Краткий ответ ассистента: " + "\n"
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: " + user_input + "\n" + "Краткий ответ ассистента: " + "\n"
                 else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: '" + user_input + "'" + "\n" + "Assistant's short answer: " + "\n"
+                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant's short answer: " + "\n"
 
                 return augmented_query
 
@@ -342,15 +313,16 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
-                res = client.chat.completions.create(temperature=0.0,
-                model='gpt-4',
-                #model='gpt-4-1106-preview',
-                messages=[
-                    {"role": "system", "content": primer},
-                    {"role": "user", "content": augmented_query}
-                ])  
-                print(res)           
-                reply = res.choices[0].message.content
+                res = openai.ChatCompletion.create(
+                    temperature=0.0,
+                    model='gpt-4',
+                    #model='gpt-4-1106-preview',
+                    messages=[
+                        {"role": "system", "content": primer},
+                        {"role": "user", "content": augmented_query}
+                    ]
+                )             
+                reply = res['choices'][0]['message']['content']
                 return reply
             
             # Start RAG
@@ -363,24 +335,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             }
 
             print("\n\n" + response + "\n\n")
-
-            # # Prepare data to be written to db
-            # json_data = json.dumps({"category": category, "time": timestamp})
-            # # Commit to db
-            # # Parse JSON
-            # data = json.loads(json_data)
-            # category = data['category']
-            # timestamp = datetime.strptime(data['time'], '%B %d, %Y %H:%M:%S')
-            # # Insert data
-            # cursor.execute('INSERT INTO category_data (category, timestamp) VALUES (?, ?)', (category, timestamp))
-
-            # # Commit changes
-            # conn.commit()
-
-            # # Querying the database to verify the insertion (optional)
-            # cursor.execute('SELECT * FROM category_data')
-            # print(cursor.fetchall())
-
             return {'output': response}
     
         except ValueError as e:
