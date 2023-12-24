@@ -189,7 +189,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         print('Nonsense detected!')
         if locale == 'fr':
             return {'output': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger."}
-        if locale == 'ru':
+        elif locale == 'ru':
             return {'output': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger."}
         else: 
             return {'output': "I'm sorry, I did quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
@@ -205,7 +205,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
            re.search(XRP_ADDRESS_PATTERN, user_input, re.IGNORECASE):
         if locale == 'fr':
             return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau."}
-        if locale == 'ru':
+        elif locale == 'ru':
             return {'output':"Извините, но я не могу помочь с вопросами, которые включают адреса счетов криптовалюты. Пожалуйста, удалите адрес из вашего запроса и напишите ваш запрос еще раз."}
         else:
             return {'output':"I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"}
@@ -213,7 +213,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
     if re.search(email_pattern, user_input):
         if locale == 'fr':
             return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."}
-        if locale == 'ru':
+        elif locale == 'ru':
             return {'output':"Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова."}
         else:
             return{'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."}
