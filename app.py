@@ -7,11 +7,6 @@ import openai
 from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, TypeAdapter
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from fastapi import BackgroundTasks
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from nostril import nonsense
@@ -81,36 +76,12 @@ def tiktoken_len(text):
     )
     return len(tokens)
 
-async def get_user_id(request: Request):
-   try:
-       body = TypeAdapter(Query).validate_python(await request.json())
-       user_id = body.user_id
-       return user_id
-   except Exception as e:
-       return get_remote_address(request)
-
 # Define FastAPI app
 app = FastAPI()
 
-# Define rate-limiter
-def get_user_id_wrapper(request: Request):
-   return get_user_id(request)
-
-limiter = Limiter(key_func=get_user_id_wrapper)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
-
-@app.exception_handler(RateLimitExceeded)
-async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content={"detail": "Too many requests, please try again in a minute."},
-    )
-
 # Initialize user state and periodic cleanup function
 user_states = {}
-TIMEOUT_SECONDS = 1 * 10 * 60  # 10 minutes
+TIMEOUT_SECONDS = 600  # 10 minutes
 
 async def periodic_cleanup():
     while True:
@@ -163,7 +134,7 @@ SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
 # Define RAG route
 @app.post('/gpt')
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = query.user_input.strip()
@@ -192,7 +163,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         elif locale == 'ru':
             return {'output': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger."}
         else: 
-            return {'output': "I'm sorry, I did quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
+            return {'output': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
   
 
     if re.search(EVM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
