@@ -134,7 +134,6 @@ SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
 # Define RAG route
 @app.post('/gpt')
-# @limiter.limit("100/minute")
 async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = query.user_input.strip()
