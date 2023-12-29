@@ -3,10 +3,10 @@ import json
 from dotenv import main
 from datetime import datetime
 import pinecone
-import openai
+from openai import OpenAI
 from fastapi import FastAPI, Request, HTTPException, status, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, TypeAdapter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from nostril import nonsense
@@ -38,13 +38,13 @@ class Query(BaseModel):
     user_locale: str | None = None
 
 # Initialize Pinecone
-openai.api_key=os.environ['OPENAI_API_KEY']
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
 index = pinecone.Index(index_name)
 
-# Initialize OpenAI embedding model
+# Initialize OpenAI client & Embedding model
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 embed_model = "text-embedding-ada-002"
 
 # Initialize Cohere
@@ -255,7 +255,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                     # Fallback to simpler retrieval without Cohere if reranking fails
                     res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
-                    sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.77], key=lambda x: x['score'], reverse=True)
+                    sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
 
                     for idx, item in enumerate(sorted_items):
                         context = item['metadata']['text']
@@ -290,16 +290,15 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             async def rag(query, contexts=None):
 
                 try: 
-                    res = openai.ChatCompletion.create(
+                    res = client.chat.completions.create(
                         temperature=0.0,
                         model='gpt-4',
                         #model='gpt-4-1106-preview',
                         messages=[
                             {"role": "system", "content": primer},
                             {"role": "user", "content": augmented_query}
-                        ]
-                    )             
-                    reply = res['choices'][0]['message']['content']
+                    ])             
+                    reply = res.choices[0].message.content
                     return reply
                 
                 except Exception as e:
