@@ -8,19 +8,20 @@ from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
-from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from nostril import nonsense
 import tiktoken
 import re
 import time
 import cohere
+from cohere.responses.classify import Example
+from typing import NamedTuple
 import asyncio
 
 
 # Initialize environment variables
 main.load_dotenv()
 
-# Initialize backend
+# Initialize backend & API keys
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -29,7 +30,6 @@ async def get_api_key(api_key_header: str = Depends(api_key_header)):
     if not api_key_header or api_key_header.split(' ')[1] != server_api_key:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return api_key_header
-
 
 # Define query class
 class Query(BaseModel):
@@ -51,7 +51,7 @@ embed_model = "text-embedding-ada-002"
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
 
-# Email address detector
+# Initialize email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 def find_emails(text):  
     return re.findall(email_pattern, text)
@@ -139,6 +139,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
     user_input = query.user_input.strip()
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
 
+    # Load localized system prompt
     def load_sysprompt(locale):
         filename = f'system_prompt_{locale}.txt'
         try:
@@ -146,15 +147,27 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 return sys_file.read()
         except FileNotFoundError:
             raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
-
     primer = load_sysprompt(locale)
 
+    # load classifier system prompt
+    def load_categories():
+        filecat = f'classifier_prompt.txt'
+        try:
+            with open(filecat, 'r') as categories:
+                return categories.read()
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail=f"Categories not found!")
+        
+    classifier_prompt = load_categories()
+
+    # Create a conversation history for new users
     if user_id not in user_states:
         user_states[user_id] = {
             'previous_queries': [],
             'timestamp': time.time()
         }
 
+    # Filter out nonsense queries
     if not user_input or nonsense(user_input):
         print('Nonsense detected!')
         if locale == 'fr':
@@ -164,7 +177,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         else: 
             return {'output': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
   
-
+    # Filter out crypto addresses
     if re.search(EVM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(BITCOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
            re.search(LITECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
@@ -180,6 +193,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         else:
             return {'output':"I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"}
     
+    # Filter out emails
     if re.search(email_pattern, user_input):
         if locale == 'fr':
             return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."}
@@ -187,34 +201,80 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             return {'output':"Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова."}
         else:
             return{'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."}
-    
+         
     else:
         
         try:
 
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
-            
+            #timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
+     
+            try:
+                resp = client.chat.completions.create(
+                    temperature=0.0,
+                    model='gpt-3.5-turbo',
+                    seed=0,
+                    messages=[
+                        {"role": "system", "content": classifier_prompt},
+                        {"role": "user", "content": user_input}
+                    ],
+                    timeout=5.0,
+                    max_tokens=50,
+                )
+                category = resp.choices[0].message.content.lower()
+
+                # Define message based on locale
+                messages = {
+                    'eng': 'My issue seems to be with ',
+                    'fr': 'Mon problème semble être lié à ',
+                    'ru': 'Моя проблема, кажется, связана с '
+                }
+                message = messages.get(locale, 'My issue seems to be with ')
+                # Construct the issue and enriched issue
+                my_issue = message + category
+                print(my_issue)
+                enriched_issue = my_issue + ". " + user_input
+
+                # Filter greetings and request for human support
+                if category:
+                    if category == "greetings":
+                        if locale == 'fr':
+                            return{"output":"Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. "}
+                        elif locale == 'ru':
+                            return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
+                        else:
+                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}
+                    elif category == "agent":
+                        if locale == 'fr':
+                            return{"output":"Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !"}
+                        elif locale == 'ru':
+                            return{"output":"Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!"}
+                        else:
+                            return {"output": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"}
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                enriched_issue = user_input
+                print("Error in categorization")
+
             #############
                        
             async def retrieve(query, contexts=None):
                 # Define context box
                 contexts = []
-                
+
                 # Prepare Cohere embeddings 
                 try:
-
-                    # Choose the model based on the locale
+                 # Choose the model based on the locale
                     model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
 
                     # Call the embedding function
                     res_embed = co.embed(
-                        texts=[user_input],
+                        texts=[enriched_issue],
                         model=model,
                         input_type='search_query'
                     )
-
-                    
+                # Catch errors
                 except Exception as e:
                     print(f"Embedding failed: {e}")
 
@@ -240,7 +300,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
                     print(reranker_model)
                     rerank_docs = co.rerank(
-                        query=query, 
+                        query=enriched_issue, 
                         documents=docs.keys(), 
                         top_n=2, 
                         model=reranker_model
@@ -274,16 +334,16 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant: " + "\n"
+                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Utilisateur: \"" + enriched_issue + "\"\n" + "Assistant: " + "\n"
                 elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: " + user_input + "\n" + "Краткий ответ ассистента: " + "\n"
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: \"" + enriched_issue + "\"\n" + "Краткий ответ ассистента: " + "\n"
                 else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: " + user_input + "\n" + "Assistant's short answer: " + "\n"
+                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: \"" + enriched_issue + "\"\n" + "Assistant's short answer: " + "\n"
 
                 return augmented_query
 
             # Start Retrieval        
-            augmented_query = await retrieve(user_input)
+            augmented_query = await retrieve(enriched_issue)
             print(augmented_query)
 
             # Request and return OpenAI RAG
