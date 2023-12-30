@@ -51,6 +51,18 @@ embed_model = "text-embedding-ada-002"
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
 
+# # Initialize and load Cohere classifier categories
+# Example = NamedTuple("Example", [("text", str), ("label", str)])
+# def load_examples():
+#     filecat = f'examples.json'
+#     try:
+#         with open(filecat, 'r') as file:
+#             examples_list = json.load(file)
+#             return [Example(**ex) for ex in examples_list]
+#     except FileNotFoundError:
+#         raise HTTPException(status_code=500, detail="Examples file not found!")
+# examples = load_examples()
+
 # Initialize email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 def find_emails(text):  
@@ -149,17 +161,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
     primer = load_sysprompt(locale)
 
-    # load classifier system prompt
-    def load_categories():
-        filecat = f'classifier_prompt.txt'
-        try:
-            with open(filecat, 'r') as categories:
-                return categories.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail=f"Categories not found!")
-        
-    classifier_prompt = load_categories()
-
     # Create a conversation history for new users
     if user_id not in user_states:
         user_states[user_id] = {
@@ -208,8 +209,25 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
-            #timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
-     
+            timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
+
+            # # Categorize ticket with Cohere
+            # res_classifier = co.classify(
+            #     inputs=[user_input],
+            #     examples=examples,
+            # )
+            # category = res_classifier.classifications[0].predictions[0]
+
+            def load_categories():
+                filename = f'classifier_prompt.txt'
+                try:
+                    with open(filename, 'r') as categories:
+                        return categories.read()
+                except FileNotFoundError:
+                    raise HTTPException(status_code=500, detail=f"Categories not found!")
+                
+            classifier_prompt = load_categories()
+            
             try:
                 resp = client.chat.completions.create(
                     temperature=0.0,
@@ -223,6 +241,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     max_tokens=50,
                 )
                 category = resp.choices[0].message.content.lower()
+                print(category)
 
                 # Define message based on locale
                 messages = {
@@ -244,7 +263,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                         elif locale == 'ru':
                             return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
                         else:
-                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}
+                            return {"output": "Hello! How can I assist you with your Ledger-related concerns today? The more details you share about your issue, the better I can assist you. Feel free to describe it in as much detail as possible!"}
                     elif category == "agent":
                         if locale == 'fr':
                             return{"output":"Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !"}

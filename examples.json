@@ -1,0 +1,765 @@
+[
+    {"text": "There's no way to recover the accounts behind the passphrase if I don't remember it?", "label": "Passphrase"},
+    {"text": "How can I verify my Passphrase? I want to make sure that it is correct.", "label": "Passphrase"},
+    {"text": "can you please tell me if you have a physical store in Paris?", "label": "Other"},
+    {"text": "does ledger hire?", "label": "Other"},
+    {"text": "representative agent", "label": "agent"},
+    {"text": "speak to human", "label": "agent"},
+    {"text": "hello!", "label": "greetings"},
+    {"text": "hi! can you help me?", "label": "greetings"},
+    {"text": "I recently reset my Ledger wallet, but I'm having trouble restoring it with my 24-word recovery phrase. What should I do?", "label": "24-word recovery phrase or private keys issue"},
+    {"text": "I entered my 24-word recovery phrase to access my Ledger wallet, but it's saying it's incorrect. Can you help me resolve this?", "label": "24-word recovery phrase or private keys issue"},
+    {"text": "Why does the balance shown in my Ledger Live app not match with the actual amount in my wallet?", "label": "Balance / Graph in Ledger Live is wrong"},
+    {"text": "The portfolio graph in Ledger Live doesn't seem to reflect my recent transactions. How can I fix this?", "label": "Balance / Graph in Ledger Live is wrong"},
+    {"text": "I'm trying to take advantage of the Black Friday offer. Are there any special promotions for Ledger products?", "label": "Black Friday"},
+    {"text": "Is there a Black Friday discount code I can use for purchasing a Ledger wallet?", "label": "Black Friday"},
+    {"text": "I'm facing issues with my CL card on my Ledger device. Who can I contact for assistance?", "label": "CL card issue"},
+    {"text": "My CL card isn't working as expected with my Ledger wallet. What steps should I take?", "label": "CL card issue"},
+    {"text": "I'm trying to install the latest firmware update on my Ledger, but it's not working. Can you help?", "label": "Can't install firmware/OS update"},
+    {"text": "My Ledger device is having trouble updating to the new firmware OS. What should I do?", "label": "Can't install firmware/OS update"},
+    {
+        "text": "I can't seem to get my Ledger device to connect via Bluetooth to my Android phone. What should I do?",
+        "label": "Connection issues on Android phone -> Bluetooth connection issues"
+    },
+    {
+        "text": "My Android phone is having trouble finding my Ledger device over Bluetooth. Any suggestions?",
+        "label": "Connection issues on Android phone -> Bluetooth connection issues"
+    },
+    {
+        "text": "When I connect my Ledger to my Android phone via USB, it doesn\u2019t get recognized. What's the issue?",
+        "label": "Connection issues on Android phone -> USB connection issues"
+    },
+    {
+        "text": "My Android phone won't connect to my Ledger device using a USB cable. How can I fix this?",
+        "label": "Connection issues on Android phone -> USB connection issues"
+    },
+    {
+        "text": "My Ledger device won't connect via Bluetooth to my iPhone. How can I resolve this?",
+        "label": "Connection issues on iPhone -> Bluetooth connection issues"
+    },
+    {
+        "text": "I'm facing Bluetooth connection issues between my iPhone and Ledger device. What steps should I take?",
+        "label": "Connection issues on iPhone -> Bluetooth connection issues"
+    },
+    {
+        "text": "My Ledger isn't being detected by my Linux laptop when connected via USB. Can you help?",
+        "label": "Connection issues on Linux desktop/laptop -> USB connection"
+    },
+    {
+        "text": "I'm unable to connect my Ledger device to my Linux desktop using USB. What should I do?",
+        "label": "Connection issues on Linux desktop/laptop -> USB connection"
+    },
+    {
+        "text": "My MacBook isn't recognizing my Ledger when I connect it via USB. What could be the problem?",
+        "label": "Connection issues on macOS desktop/laptop -> USB connection"
+    },
+    {
+        "text": "I'm having trouble connecting my Ledger device to my macOS laptop via USB. Any advice?",
+        "label": "Connection issues on macOS desktop/laptop -> USB connection"
+    },
+    {
+        "text": "My Windows laptop isn't detecting my Ledger device through USB. What steps should I follow?",
+        "label": "Connection issues on Windows desktop/laptop -> USB connection"
+    },
+    {
+        "text": "I can't get my Ledger to connect to my Windows desktop via USB. What should I do?",
+        "label": "Connection issues on Windows desktop/laptop -> USB connection"
+    },
+    {
+        "text": "How can I use Dapps safely with my Ledger device, outside of Ledger Live?",
+        "label": "Dapps / Third-party apps (outside from Ledger Live)"
+    },
+    {
+        "text": "What are the steps to access third-party apps with my Ledger, outside of Ledger Live?",
+        "label": "Dapps / Third-party apps (outside from Ledger Live)"
+    },
+    {
+        "text": "How do I transfer my accounts from the Ledger Live desktop app to the mobile app?",
+        "label": "Export Accounts from Ledger Live desktop to Ledger Live mobile"
+    },
+    {
+        "text": "Is it possible to sync my Ledger Live accounts between desktop and mobile, and how?",
+        "label": "Export Accounts from Ledger Live desktop to Ledger Live mobile"
+    },
+    {
+        "text": "I have some ideas for improving Ledger Live. Where can I submit my feedback and feature requests?",
+        "label": "Feedback & feature request"
+    },
+    {
+        "text": "How can I request a new feature for the Ledger wallet or Ledger Live app?",
+        "label": "Feedback & feature request"
+    },
+    {
+        "text": "I would like to know what personal data Ledger has collected about me. How can I request this information?",
+        "label": "GDPR and data privacy request"
+    },
+    {
+        "text": "Can I ask Ledger to delete all my personal data under GDPR?",
+        "label": "GDPR and data privacy request"
+    },
+    {
+        "text": "How can I change the receiving address for UTXO coins like Bitcoin in my Ledger wallet?",
+        "label": "General questions -> Changing receiving address for UTXO coins"
+    },
+    {
+        "text": "Why does my receiving address for Bitcoin keep changing in Ledger Live, and how do I control it?",
+        "label": "General questions -> Changing receiving address for UTXO coins"
+    },
+    {
+        "text": "Can I use Ledger Live on multiple computers, and will my data be synchronized across them?",
+        "label": "General questions -> How to use multiple Ledger Live installations?"
+    },
+    {
+        "text": "How can I manage my Ledger wallet from different computers using Ledger Live?",
+        "label": "General questions -> How to use multiple Ledger Live installations?"
+    },
+    {
+        "text": "Is it possible to manage multiple Ledger devices with a single Ledger Live application?",
+        "label": "General questions -> How to use multiple Ledger devices on one Ledger Live app?"
+    },
+    {
+        "text": "How do I add another Ledger device to my existing Ledger Live app?",
+        "label": "General questions -> How to use multiple Ledger devices on one Ledger Live app?"
+    },
+    {
+        "text": "How can I check if my Ledger wallet is an authentic device?",
+        "label": "General questions -> How to verify my Ledger device is genuine?"
+    },
+    {
+        "text": "What are the steps to verify the authenticity of my Ledger hardware wallet?",
+        "label": "General questions -> How to verify my Ledger device is genuine?"
+    },
+    {
+        "text": "What does the sunset of the Ledger Nano S mean for me as a user?",
+        "label": "General questions -> Nano S sunset questions"
+    },
+    {
+        "text": "Can I still use my Ledger Nano S now that it's being sunset, and what are my options?",
+        "label": "General questions -> Nano S sunset questions"
+    },
+    {
+        "text": "Which new coins or tokens will be supported by Ledger in the near future?",
+        "label": "General questions -> Question about coin/token support"
+    },
+    {
+        "text": "How can I request for a specific coin or token to be supported on Ledger?",
+        "label": "General questions -> Question about coin/token support"
+    },
+    {
+        "text": "Does Ledger Live provide any tools or features to help with generating tax reports?",
+        "label": "General questions -> Tax report"
+    },
+    {
+        "text": "How can I export my transaction history from Ledger Live for tax purposes?",
+        "label": "General questions -> Tax report"
+    },
+    {
+        "text": "My Ledger Nano X isn't holding a charge as it used to. Is this a common battery issue?",
+        "label": "Hardware issues -> Battery -> Nano X"
+    },
+    {
+        "text": "I'm experiencing battery problems with my Ledger Nano X. How should I address this?",
+        "label": "Hardware issues -> Battery -> Nano X"
+    },
+    {
+        "text": "The screen on my Ledger Nano S is flickering. What can I do to fix this?",
+        "label": "Hardware issues -> Screen -> Nano S"
+    },
+    {
+        "text": "I'm having trouble with the display on my Nano S, it's not showing properly. Any solutions?",
+        "label": "Hardware issues -> Screen -> Nano S"
+    },
+    {
+        "text": "My Ledger Nano S Plus screen is blank, even when connected. What should I do?",
+        "label": "Hardware issues -> Screen -> Nano S Plus"
+    },
+    {
+        "text": "The screen on my Nano S Plus is not responding. Is there a way to troubleshoot this?",
+        "label": "Hardware issues -> Screen -> Nano S Plus"
+    },
+    {
+        "text": "The display on my Nano X is having issues. It's either too dim or not showing at all. How can I resolve this?",
+        "label": "Hardware issues -> Screen -> Nano X"
+    },
+    {
+        "text": "I've noticed some screen glitches on my Ledger Nano X. Is this a known issue?",
+        "label": "Hardware issues -> Screen -> Nano X"
+    },
+    {
+        "text": "I'm unable to download Ledger Live from the official website. Are there any alternative sources?",
+        "label": "Install/update Ledger Live -> Issue with downloading Ledger Live"
+    },
+    {
+        "text": "I'm facing problems downloading Ledger Live. Is there a server issue or something else?",
+        "label": "Install/update Ledger Live -> Issue with downloading Ledger Live"
+    },
+    {
+        "text": "I've downloaded Ledger Live but can't seem to install it on my computer. What should I check?",
+        "label": "Install/update Ledger Live -> Issue with installing Ledger Live"
+    },
+    {
+        "text": "My installation of Ledger Live is failing. Are there any specific system requirements?",
+        "label": "Install/update Ledger Live -> Issue with installing Ledger Live"
+    },
+    {
+        "text": "Every time I try to update Ledger Live, it fails. What could be causing this?",
+        "label": "Install/update Ledger Live -> Issue with updating Ledger Live"
+    },
+    {
+        "text": "I'm having trouble updating my Ledger Live to the latest version. Are there any common issues I should know about?",
+        "label": "Install/update Ledger Live -> Issue with updating Ledger Live"
+    },
+    {
+        "text": "I'm having trouble adding a new account in Ledger Live. What steps should I follow?",
+        "label": "Issue with adding an account in Ledger Live"
+    },
+    {
+        "text": "Why can't I add a specific cryptocurrency account to my Ledger Live?",
+        "label": "Issue with adding an account in Ledger Live"
+    },
+    {
+        "text": "I encountered an error while purchasing a Ledger wallet from the official website. What should I do?",
+        "label": "Issue with buying a Ledger device through the Ledger store/website"
+    },
+    {
+        "text": "I'm having issues completing my order for a Ledger device on the Ledger store. Can you assist?",
+        "label": "Issue with buying a Ledger device through the Ledger store/website"
+    },
+    {
+        "text": "I'm facing problems while trying to buy crypto directly through Ledger Live. What could be the issue?",
+        "label": "Issue with buying crypto"
+    },
+    {
+        "text": "Why am I unable to complete a crypto purchase transaction in Ledger Live?",
+        "label": "Issue with buying crypto"
+    },
+    {
+        "text": "I can't seem to install a new app on my Ledger. Are there any prerequisites I'm missing?",
+        "label": "Issue with installing an app on my Ledger device"
+    },
+    {
+        "text": "My Ledger device is giving me an error when I try to install an app. What's going wrong?",
+        "label": "Issue with installing an app on my Ledger device"
+    },
+    {
+        "text": "I haven't received the Bitcoin I was expecting in my Ledger account. What might be causing this delay?",
+        "label": "Issue with receiving Bitcoin (BTC) in my Ledger account"
+    },
+    {
+        "text": "Why is my recent Bitcoin transaction not reflecting in my Ledger account?",
+        "label": "Issue with receiving Bitcoin (BTC) in my Ledger account"
+    },
+    {
+        "text": "My Ledger account hasn't shown the Ethereum I received. Is there a syncing issue?",
+        "label": "Issue with receiving Ethereum (ETH) in my Ledger account"
+    },
+    {
+        "text": "I'm having trouble seeing the Ethereum sent to my Ledger. What steps should I take?",
+        "label": "Issue with receiving Ethereum (ETH) in my Ledger account"
+    },
+    {
+        "text": "I sent Solana to my Ledger account but it's not showing up. What should I check?",
+        "label": "Issue with receiving Solana (SOL) in my Ledger account"
+    },
+    {
+        "text": "Is there a known issue with receiving Solana in Ledger accounts currently?",
+        "label": "Issue with receiving Solana (SOL) in my Ledger account"
+    },
+    {
+        "text": "My Tron transaction is not appearing in my Ledger Live account. What could be wrong?",
+        "label": "Issue with receiving Tron (TRX) in my Ledger account"
+    },
+    {
+        "text": "I'm not able to see the Tron that was sent to me in my Ledger. Any advice?",
+        "label": "Issue with receiving Tron (TRX) in my Ledger account"
+    },
+    {
+        "text": "I transferred USDT to my Ledger account but it's not visible. What should I do?",
+        "label": "Issue with receiving Tether (USDT) in my Ledger account"
+    },
+    {
+        "text": "My Ledger Live doesn't show the Tether I recently received. Is there a delay?",
+        "label": "Issue with receiving Tether (USDT) in my Ledger account"
+    },
+    {
+        "text": "I'm facing issues with USDC transactions not showing in my Ledger Live. What can be the cause?",
+        "label": "Issue with receiving USDC in my Ledger account"
+    },
+    {
+        "text": "Why is my USDC transfer not reflected in my Ledger account?",
+        "label": "Issue with receiving USDC in my Ledger account"
+    },
+    {
+        "text": "I sent XRP to my Ledger wallet but it hasn't appeared yet. Is there a processing time?",
+        "label": "Issue with receiving XRP in my Ledger account"
+    },
+    {
+        "text": "My XRP transaction to my Ledger account isn't showing. What could be the issue?",
+        "label": "Issue with receiving XRP in my Ledger account"
+    },
+    {
+        "text": "I'm having difficulty selling cryptocurrency through Ledger Live. What might be the problem?",
+        "label": "Issue with selling crypto in Ledger Live"
+    },
+    {
+        "text": "Why can't I complete a crypto sale transaction in Ledger Live?",
+        "label": "Issue with selling crypto in Ledger Live"
+    },
+    {
+        "text": "I'm encountering errors when trying to send Bitcoin from my Ledger. What should I do?",
+        "label": "Issue with sending Bitcoin (BTC) from my Ledger account"
+    },
+    {
+        "text": "Why is my Bitcoin transaction from Ledger Live failing to go through?",
+        "label": "Issue with sending Bitcoin (BTC) from my Ledger account"
+    },
+    {
+        "text": "I'm unable to send Ethereum from my Ledger account. Are there any common issues I should be aware of?",
+        "label": "Issue with sending Ethereum (ETH) from my Ledger account"
+    },
+    {
+        "text": "My attempt to transfer Ethereum from my Ledger wallet keeps failing. What could be causing this?",
+        "label": "Issue with sending Ethereum (ETH) from my Ledger account"
+    },
+    {
+        "text": "Is there a known issue with sending Solana from Ledger accounts, as my transaction isn't processing?",
+        "label": "Issue with sending Solana (SOL) from my Ledger account"
+    },
+    {
+        "text": "I tried sending SOL from my Ledger, but it's not working. Can you help me troubleshoot?",
+        "label": "Issue with sending Solana (SOL) from my Ledger account"
+    },
+    {
+        "text": "I'm facing difficulties sending TRX from my Ledger wallet. What steps should I follow?",
+        "label": "Issue with sending Tron (TRX) from my Ledger account"
+    },
+    {
+        "text": "My Ledger Live app is giving an error when I try to send Tron. What's going wrong?",
+        "label": "Issue with sending Tron (TRX) from my Ledger account"
+    },
+    {
+        "text": "I can't seem to send USDT from my Ledger. Is there any specific procedure I need to follow?",
+        "label": "Issue with sending Tether (USDT) from my Ledger account"
+    },
+    {
+        "text": "Every time I try to send Tether from my Ledger, it fails. What could be the issue?",
+        "label": "Issue with sending Tether (USDT) from my Ledger account"
+    },
+    {
+        "text": "Why am I unable to send USDC from my Ledger Live account?",
+        "label": "Issue with sending USDC from my Ledger account"
+    },
+    {
+        "text": "I'm having trouble completing a USDC transaction from my Ledger. What should I check?",
+        "label": "Issue with sending USDC from my Ledger account"
+    },
+    {
+        "text": "Sending XRP from my Ledger account is not working. Are there any known issues?",
+        "label": "Issue with sending XRP from my Ledger account"
+    },
+    {
+        "text": "I'm experiencing problems while trying to send XRP from my Ledger. What can I do?",
+        "label": "Issue with sending XRP from my Ledger account"
+    },
+    {
+        "text": "I'm having trouble sending ERC20 tokens from my Ethereum account on Ledger. What should I do?",
+        "label": "Issue with sending an ERC20 token from my Ledger Ethereum account"
+    },
+    {
+        "text": "Why is my transaction of an ERC20 token from my Ledger Ethereum account failing?",
+        "label": "Issue with sending an ERC20 token from my Ledger Ethereum account"
+    },
+    {
+        "text": "I can't send BEP20 tokens from my Ledger's Binance Smart Chain account. What could be wrong?",
+        "label": "Issue with sending a BEP20 token from my Ledger Binance Smart Chain account"
+    },
+    {
+        "text": "Is there a specific process to follow when sending BEP20 tokens from a Ledger BSC account?",
+        "label": "Issue with sending a BEP20 token from my Ledger Binance Smart Chain account"
+    },
+    {
+        "text": "Sending SPL tokens from my Solana account on Ledger isn't working. Can you assist?",
+        "label": "Issue with sending a Solana SPL token from my Ledger Solana account"
+    },
+    {
+        "text": "I'm encountering errors while trying to send SPL tokens from my Ledger Solana account. What can I do?",
+        "label": "Issue with sending a Solana SPL token from my Ledger Solana account"
+    },
+    {
+        "text": "I'm facing issues with a dapp connected to my Ledger. What are the common troubleshooting steps?",
+        "label": "Issue with third-party wallet or dapp connected to Ledger device"
+    },
+    {
+        "text": "My third-party wallet isn't interacting properly with my Ledger device. What should I check?",
+        "label": "Issue with third-party wallet or dapp connected to Ledger device"
+    },
+    {
+        "text": "I can't access the 'My Ledger' section in the Ledger Live desktop app. Is there a fix for this?",
+        "label": "Ledger Live desktop app > Cannot access 'My Ledger' section in the app"
+    },
+    {
+        "text": "Why am I unable to view the 'My Ledger' section on the Ledger Live app on my desktop?",
+        "label": "Ledger Live desktop app > Cannot access 'My Ledger' section in the app"
+    },
+    {
+        "text": "Ledger Live on my desktop crashes upon starting. How can I resolve this?",
+        "label": "Ledger Live desktop app > crashing when starting/launching the app"
+    },
+    {
+        "text": "Every time I launch Ledger Live on my desktop, it crashes. What should I do?",
+        "label": "Ledger Live desktop app > crashing when starting/launching the app"
+    },
+    {
+        "text": "The 'My Ledger' section in the mobile app isn't accessible. What could be the issue?",
+        "label": "Ledger Live mobile app > Cannot access 'My Ledger' section in the app"
+    },
+    {
+        "text": "I'm unable to access the 'My Ledger' section on the Ledger Live mobile app. Any solutions?",
+        "label": "Ledger Live mobile app > Cannot access 'My Ledger' section in the app"
+    },
+    {
+        "text": "My Ledger Live mobile app keeps crashing on launch. How can I fix this?",
+        "label": "Ledger Live mobile app > crashing when starting/launching the app"
+    },
+    {
+        "text": "What should I do if the Ledger Live app on my phone crashes every time I try to open it?",
+        "label": "Ledger Live mobile app > crashing when starting/launching the app"
+    },
+    {
+        "text": "I'm having trouble activating the Ledger Recover service. What steps should I follow?",
+        "label": "Ledger Recover -> Issue with activating the service"
+    },
+    {
+        "text": "Why can't I activate the Ledger Recover service on my device?",
+        "label": "Ledger Recover -> Issue with activating the service"
+    },
+    {
+        "text": "I'm facing issues restoring my seed with Ledger Recover. Can you guide me?",
+        "label": "Ledger Recover -> Issue with restoring my seed"
+    },
+    {
+        "text": "How do I correctly restore my seed using the Ledger Recover service?",
+        "label": "Ledger Recover -> Issue with restoring my seed"
+    },
+    {
+        "text": "I can't seem to restore my Ledger Recover credentials using my email and password. What should I do?",
+        "label": "Ledger Recover -> I cannot restore my Ledger Recover credentials with my email and password"
+    },
+    {
+        "text": "Why is the Ledger Recover not accepting my email and password for credential restoration?",
+        "label": "Ledger Recover -> I cannot restore my Ledger Recover credentials with my email and password"
+    },
+    {
+        "text": "Can you provide some general information about the Ledger Recover service?",
+        "label": "Ledger Recover -> General questions"
+    },
+    {
+        "text": "What are the most common questions and issues regarding Ledger Recover?",
+        "label": "Ledger Recover -> General questions"
+    },
+    {
+        "text": "How can I verify if a Ledger reseller on Amazon is legitimate?",
+        "label": "Ledger Resellers or Amazon question"
+    },
+    {
+        "text": "Are there specific things to look for when buying a Ledger product from a reseller?",
+        "label": "Ledger Resellers or Amazon question"
+    },
+    {
+        "text": "What are some common questions about the new Ledger Stax?",
+        "label": "Ledger Stax -> General questions"
+    },
+    {
+        "text": "Can you provide some general information about Ledger Stax and its features?",
+        "label": "Ledger Stax -> General questions"
+    },
+    {
+        "text": "I pre-ordered a Ledger Stax. When can I expect it to be shipped?",
+        "label": "Ledger Stax -> When will you ship my Ledger Stax?"
+    },
+    {
+        "text": "What is the estimated delivery time for the Ledger Stax after placing an order?",
+        "label": "Ledger Stax -> When will you ship my Ledger Stax?"
+    },
+    {
+        "text": "I've lost my 24-word recovery seed phrase for my Ledger. What are my options?",
+        "label": "Lost my 24-word recovery seed phrase"
+    },
+    {
+        "text": "Is there any way to access my funds if I lose my Ledger's recovery seed phrase?",
+        "label": "Lost my 24-word recovery seed phrase"
+    },
+    {
+        "text": "What should I do if I lose my Ledger hardware wallet?",
+        "label": "Lost my Ledger device"
+    },
+    {
+        "text": "I misplaced my Ledger device. How can I secure my assets?",
+        "label": "Lost my Ledger device"
+    },
+    {
+        "text": "I've lost both my Ledger device and the recovery seed phrase. Is there any way to recover my assets?",
+        "label": "Lost my Ledger device and my 24-word recovery seed phrase"
+    },
+    {
+        "text": "What steps should I take if I lose my Ledger wallet and the associated recovery phrase?",
+        "label": "Lost my Ledger device and my 24-word recovery seed phrase"
+    },
+    {
+        "text": "I forgot the PIN code to my Ledger wallet. How can I regain access?",
+        "label": "Lost my PIN code"
+    },
+    {
+        "text": "What's the procedure for resetting the PIN of a Ledger device if it's forgotten?",
+        "label": "Lost my PIN code"
+    },
+    {
+        "text": "I'm having issues sending an NFT from my Ledger. Can you help?",
+        "label": "NFTs -> Issue or question with sending or receiving an NFT"
+    },
+    {
+        "text": "Why haven't I received an NFT that was sent to my Ledger account?",
+        "label": "NFTs -> Issue or question with sending or receiving an NFT"
+    },
+    {
+        "text": "I received a suspicious NFT in my Ledger account. What should I do?",
+        "label": "NFTs -> Received scam vouchers or scam NFT in my account"
+    },
+    {
+        "text": "How can I deal with scam NFTs or vouchers that appear in my Ledger account?",
+        "label": "NFTs -> Received scam vouchers or scam NFT in my account"
+    },
+    {
+        "text": "Can you explain how Bitcoin ordinals work with Ledger devices?",
+        "label": "NFTs -> Bitcoin ordinals"
+    },
+    {
+        "text": "I'm interested in Bitcoin ordinals. How can I manage them through my Ledger?",
+        "label": "NFTs -> Bitcoin ordinals"
+    },
+    {
+        "text": "I haven't received my Ledger order yet, and it's past the estimated delivery date. What should I do?",
+        "label": "Order & Shipping issue"
+    },
+    {
+        "text": "I'm facing issues with the shipment of my Ledger device. Can you help me track it?",
+        "label": "Order & Shipping issue"
+    },
+    {
+        "text": "A transaction to my Ledger is still pending on the blockchain. How long should I expect to wait?",
+        "label": "Receive -> Pending transaction on the blockchain"
+    },
+    {
+        "text": "Why is my incoming transaction to Ledger not yet confirmed on the blockchain?",
+        "label": "Receive -> Pending transaction on the blockchain"
+    },
+    {
+        "text": "How do I safely receive funds from exchanges like Coinbase to my Ledger wallet?",
+        "label": "Receive -> Receive to Ledger from exchange like Coinbase, Binance, Kraken"
+    },
+    {
+        "text": "What are the steps to transfer crypto from Binance to my Ledger device?",
+        "label": "Receive -> Receive to Ledger from exchange like Coinbase, Binance, Kraken"
+    },
+    {
+        "text": "I received tokens on my Ledger but on the wrong blockchain network. What can I do?",
+        "label": "Receive -> Received on wrong blockchain network"
+    },
+    {
+        "text": "What should I do if I accidentally send crypto to my Ledger wallet on an incompatible network?",
+        "label": "Receive -> Received on wrong blockchain network"
+    },
+    {
+        "text": "I transferred a token to my Ledger wallet, but it's not showing in Ledger Live. Why?",
+        "label": "Receive -> Token/Crypto not showing/supported in Ledger Live"
+    },
+    {
+        "text": "What should I do if a cryptocurrency I received isn't supported in Ledger Live?",
+        "label": "Receive -> Token/Crypto not showing/supported in Ledger Live"
+    },
+    {
+        "text": "I've entered the wrong PIN code on my Ledger multiple times. What's the next step?",
+        "label": "Recovery phrase & PIN code -> Incorrect PIN code"
+    },
+    {
+        "text": "What happens if I keep entering an incorrect PIN code on my Ledger device?",
+        "label": "Recovery phrase & PIN code -> Incorrect PIN code"
+    },
+    {
+        "text": "I'm getting a 'Something went wrong' error when entering my recovery phrase. What does this mean?",
+        "label": "Recovery phrase & PIN code -> Invalid or wrong recovery phrase / 'Something went wrong' error"
+    },
+    {
+        "text": "Why does my Ledger say my recovery phrase is invalid when I try to restore it?",
+        "label": "Recovery phrase & PIN code -> Invalid or wrong recovery phrase / 'Something went wrong' error"
+    },
+    {
+        "text": "Are there other issues related to the recovery phrase or PIN code that I should be aware of with my Ledger?",
+        "label": "Recovery phrase & PIN code -> something else"
+    },
+    {
+        "text": "What are some less common problems one might encounter with the recovery phrase or PIN code on a Ledger?",
+        "label": "Recovery phrase & PIN code -> something else"
+    },
+    {
+        "text": "How can I request Ledger to support a new cryptocurrency or token that isn't currently available?",
+        "label": "Request to support new coin or token"
+    },
+    {
+        "text": "What's the process for getting a new coin or token supported on the Ledger platform?",
+        "label": "Request to support new coin or token"
+    },
+    {
+        "text": "I forgot my Ledger Live password. How can I reset it?",
+        "label": "Reset password in Ledger Live"
+    },
+    {
+        "text": "What are the steps to reset my password in the Ledger Live application?",
+        "label": "Reset password in Ledger Live"
+    },
+    {
+        "text": "I was contacted by someone claiming to be a Ledger employee. How can I verify if they're legitimate?",
+        "label": "Scam/Social engineering -> Fake Ledger employee"
+    },
+    {
+        "text": "What should I do if a supposed Ledger employee asks for my recovery phrase or private information?",
+        "label": "Scam/Social engineering -> Fake Ledger employee"
+    },
+    {
+        "text": "Can you explain what a dusting attack is and how it might affect my Ledger wallet?",
+        "label": "Scam/Social engineering/Attack -> Dusting attacks"
+    },
+    {
+        "text": "I think I might be a victim of a dusting attack on my Ledger. What steps should I take?",
+        "label": "Scam/Social engineering/Attack -> Dusting attacks"
+    },
+    {
+        "text": "How can I identify a fake Ledger Live app and protect myself from it?",
+        "label": "Scam/Social engineering/Attack -> Fake Ledger Live app"
+    },
+    {
+        "text": "I suspect I downloaded a counterfeit Ledger Live app. What should I do now?",
+        "label": "Scam/Social engineering/Attack -> Fake Ledger Live app"
+    },
+    {
+        "text": "What is a malware crypto address switcher, and how can it affect my Ledger transactions?",
+        "label": "Scam/Social engineering/Attack -> Malware crypto address switcher"
+    },
+    {
+        "text": "I think a malware might have changed my transaction addresses. What should I do?",
+        "label": "Scam/Social engineering/Attack -> Malware crypto address switcher"
+    },
+    {
+        "text": "I received unknown tokens in my Ledger wallet that seem like a scam. What's the best course of action?",
+        "label": "Scam/Social engineering/Attack -> Received scam tokens"
+    },
+    {
+        "text": "What should I do if I find scam tokens in my Ledger account?",
+        "label": "Scam/Social engineering/Attack -> Received scam tokens"
+    },
+    {
+        "text": "I sent crypto to an exchange but forgot the memo tag. What can I do?",
+        "label": "Send -> Sent crypto to an exchange without a memo tag / Forgot to include destination or memo tag"
+    },
+    {
+        "text": "What should I do if I didn't include a destination or memo tag while sending crypto to an exchange?",
+        "label": "Send -> Sent crypto to an exchange without a memo tag / Forgot to include destination or memo tag"
+    },
+    {
+        "text": "How do I set up my new Ledger Nano X or Nano S Plus?",
+        "label": "Setting up a Ledger device -> Setup Nano device: Nano X and Nano S plus"
+    },
+    {
+        "text": "What are the initial steps to start using my Ledger Nano device?",
+        "label": "Setting up a Ledger device -> Setup Nano device: Nano X and Nano S plus"
+    },
+    {
+        "text": "How can I create a new 24-word seed phrase for my Ledger device?",
+        "label": "Setup new 24-word seed phrase/recovery phrase"
+    },
+    {
+        "text": "What are the steps to set up a new recovery phrase on my Ledger?",
+        "label": "Setup new 24-word seed phrase/recovery phrase"
+    },
+    {
+        "text": "I have an issue with my Ledger device that's not covered in the usual topics. Can you help?",
+        "label": "Something else"
+    },
+    {
+        "text": "Where can I get help for a Ledger problem that doesn't fit into standard categories?",
+        "label": "Something else"
+    },
+    {
+        "text": "How do I stake Cardano (ADA) using my Ledger device?",
+        "label": "Staking -> Cardano (ADA)"
+    },
+    {
+        "text": "What are the steps for staking ADA on my Ledger?",
+        "label": "Staking -> Cardano (ADA)"
+    },
+    {
+        "text": "Can you guide me through staking Cosmos (ATOM) on my Ledger?",
+        "label": "Staking -> Cosmos (ATOM)"
+    },
+    {
+        "text": "What's the process for staking ATOM with a Ledger wallet?",
+        "label": "Staking -> Cosmos (ATOM)"
+    },
+    {
+        "text": "How do I stake Ethereum using my Ledger device?",
+        "label": "Staking -> Ethereum (ETH)"
+    },
+    {
+        "text": "What should I know before staking ETH on my Ledger?",
+        "label": "Staking -> Ethereum (ETH)"
+    },
+    {
+        "text": "Is it possible to stake Polygon (MATIC) on Ledger, and how?",
+        "label": "Staking -> Polygon (MATIC)"
+    },
+    {
+        "text": "Can you explain the procedure to stake MATIC using a Ledger wallet?",
+        "label": "Staking -> Polygon (MATIC)"
+    },
+    {
+        "text": "What are the guidelines for staking Solana (SOL) on a Ledger device?",
+        "label": "Staking -> Solana (SOL)"
+    },
+    {
+        "text": "How can I start staking SOL using my Ledger?",
+        "label": "Staking -> Solana (SOL)"
+    },
+    {
+        "text": "I'd like to stake Tezos (XTZ) on my Ledger. What do I need to do?",
+        "label": "Staking -> Tezos (XTZ)"
+    },
+    {
+        "text": "Can you assist me in setting up XTZ staking on my Ledger device?",
+        "label": "Staking -> Tezos (XTZ)"
+    },
+    {
+        "text": "How can I stake Tron (TRX) on my Ledger?",
+        "label": "Staking -> Tron (TRX)"
+    },
+    {
+        "text": "What's the process for staking TRX through a Ledger wallet?",
+        "label": "Staking -> Tron (TRX)"
+    },
+    {
+        "text": "What's the procedure for staking or nominating Polkadot (DOT) with a Ledger device?",
+        "label": "Staking or nominating -> Polkadot (DOT)"
+    },
+    {
+        "text": "How do I stake DOT on my Ledger, and what are the benefits?",
+        "label": "Staking or nominating -> Polkadot (DOT)"
+    },
+    {
+        "text": "I'm encountering problems with swapping cryptocurrencies in Ledger Live. What should I do?",
+        "label": "Swap / crypto conversion issue"
+    },
+    {
+        "text": "I faced an issue during a crypto conversion in Ledger Live. How can I resolve it?",
+        "label": "Swap / crypto conversion issue"
+    }
+    
+]
