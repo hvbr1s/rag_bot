@@ -13,7 +13,6 @@ import tiktoken
 import re
 import time
 import cohere
-from cohere.responses.classify import Example
 from typing import NamedTuple
 import asyncio
 
@@ -231,35 +230,34 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     'ru': 'Моя проблема, кажется, связана с '
                 }
                 message = messages.get(locale, 'My issue seems to be with ')
-                # Construct the issue and the enriched issue
+                # Construct the issue and enriched issue
                 my_issue = message + category
                 print(my_issue)
                 enriched_issue = my_issue + ". " + user_input
 
                 # Filter greetings and request for human support
-                if category:
-                    if category == "greetings":
-                        if locale == 'fr':
-                            return{"output":"Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. "}
-                        elif locale == 'ru':
-                            return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
-                        else:
-                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}
-                    elif category == "help":
-                        if locale == 'fr':
-                            return{"output":"Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. "}
-                        elif locale == 'ru':
-                            return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
-                        else:
-                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}    
-                    elif category == "agent":
-                        if locale == 'fr':
-                            return{"output":"Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !"}
-                        elif locale == 'ru':
-                            return{"output":"Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!"}
-                        else:
-                            return {"output": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"}
-                    
+                server_responses = {
+                    "greetings": {
+                        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
+                        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
+                        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
+                    },
+                    "help": {
+                        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
+                        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
+                        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
+                    },
+                    "agent": {
+                        "fr": "Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !",
+                        "ru": "Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!",
+                        "eng": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"
+                    }
+                }
+
+                # Use the dictionary to get the response
+                if category and category in server_responses:
+                    return {"output": server_responses[category].get(locale, server_responses[category]["eng"])}
+
             except Exception as e:
                 print(f"An error occurred: {e}")
                 enriched_issue = user_input
