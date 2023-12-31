@@ -372,7 +372,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     
                     # Fallback on Cohere chat model:
                     try:
-
                         res = co.chat(
                             message=augmented_query,
                             model='command',
@@ -380,10 +379,10 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                             temperature=0.0,
                         )
                         reply = res.text
-                        return reply
-                    
+                        return reply                   
                     except Exception as e:
                         print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
             
             # Start RAG
             response = await rag(augmented_query)
