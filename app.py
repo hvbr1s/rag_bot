@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from nostril import nonsense
-import tiktoken
 import re
 import time
 import cohere
@@ -64,16 +63,6 @@ XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
 COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
 SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
 CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
-
-
-# Initialize tokenizer and create length function
-tokenizer = tiktoken.get_encoding('cl100k_base')
-def tiktoken_len(text):
-    tokens = tokenizer.encode(
-        text,
-        disallowed_special=()
-    )
-    return len(tokens)
 
 # Define FastAPI app
 app = FastAPI()
