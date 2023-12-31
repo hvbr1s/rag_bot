@@ -231,7 +231,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     'ru': 'Моя проблема, кажется, связана с '
                 }
                 message = messages.get(locale, 'My issue seems to be with ')
-                # Construct the issue and enriched issue
+                # Construct the issue and the enriched issue
                 my_issue = message + category
                 print(my_issue)
                 enriched_issue = my_issue + ". " + user_input
@@ -245,6 +245,13 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                             return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
                         else:
                             return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}
+                    elif category == "help":
+                        if locale == 'fr':
+                            return{"output":"Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. "}
+                        elif locale == 'ru':
+                            return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
+                        else:
+                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}    
                     elif category == "agent":
                         if locale == 'fr':
                             return{"output":"Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !"}
@@ -252,6 +259,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                             return{"output":"Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!"}
                         else:
                             return {"output": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"}
+                    
             except Exception as e:
                 print(f"An error occurred: {e}")
                 enriched_issue = user_input
