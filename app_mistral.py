@@ -16,6 +16,8 @@ import cohere
 from cohere.responses.classify import Example
 from typing import NamedTuple
 import asyncio
+from mistralai.client import MistralClient
+from mistralai.models.chat_completion import ChatMessage
 
 
 # Initialize environment variables
@@ -47,9 +49,13 @@ index = pinecone.Index(index_name)
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 embed_model = "text-embedding-ada-002"
 
-# Initialize Cohere
+# Initialize Cohere client
 os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
+
+# Initialize Mistral client
+api_key = os.environ["MISTRAL_API_KEY"]
+client = MistralClient(api_key=api_key)
 
 # Initialize email address detector
 email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -211,18 +217,37 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             #timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
      
             try:
-                resp = client.chat.completions.create(
+                # # Categorize with gpt-3.5-turbo
+                # resp = client.chat.completions.create(
+                #     temperature=0.0,
+                #     model='gpt-3.5-turbo',
+                #     seed=0,
+                #     messages=[
+                #         {"role": "system", "content": classifier_prompt},
+                #         {"role": "user", "content": user_input}
+                #     ],
+                #     timeout=5.0,
+                #     max_tokens=50,
+                # )
+                # category = resp.choices[0].message.content.lower()
+
+                # Categorize with Mistral
+                mess = [
+                    ChatMessage(
+                    role="user", 
+                    content=user_input)
+                ]
+                resp = client.chat(
+                    model="mistral-small",
+                    messages=mess,
                     temperature=0.0,
-                    model='gpt-3.5-turbo',
-                    seed=0,
-                    messages=[
-                        {"role": "system", "content": classifier_prompt},
-                        {"role": "user", "content": user_input}
-                    ],
-                    timeout=5.0,
-                    max_tokens=50,
+                    safe_mode=True,
+                    safe_prompt=classifier_prompt,
+                    max_tokens=50
+
                 )
-                category = resp.choices[0].message.content.lower()
+                category = resp.choices.message.content[0]
+                print(category)
 
                 # Define message based on locale
                 messages = {
@@ -245,13 +270,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                             return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
                         else:
                             return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}
-                    elif category == "help":
-                        if locale == 'fr':
-                            return{"output":"Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. "}
-                        elif locale == 'ru':
-                            return{"output":"Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!"}
-                        else:
-                            return {"output": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"}    
                     elif category == "agent":
                         if locale == 'fr':
                             return{"output":"Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !"}
@@ -259,7 +277,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                             return{"output":"Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!"}
                         else:
                             return {"output": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"}
-                    
             except Exception as e:
                 print(f"An error occurred: {e}")
                 enriched_issue = user_input
@@ -418,4 +435,4 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 content={"message": "Snap! Something went wrong, please try again!"},
             )
 
-# Local start command: uvicorn app:app --reload --port 8800
+# Local start command: uvicorn app_mistral:app --reload --port 8800

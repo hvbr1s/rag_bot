@@ -65,7 +65,7 @@ def main():
     index = init_pinecone()
 
     # Set the article title or a bit of text from the article you're looking for
-    title = "TON"
+    title = "I CAN'T FIND THE CRYPTO I WANT TO ADD IN THE ACCOUNT LIST"
     # Get the embedding for the article link
     xq = get_embedding(title)
     # Query Pinecone to get the article ID and title using the embedding
