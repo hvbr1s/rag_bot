@@ -23,7 +23,7 @@ CATEGORIES:
 
 - Tron (Any query that specifically mentions Tron or TRX)
 
-- Greetings (Any user query that's a greeting or general request for help such as 'hi', 'hello')
+- Greetings (Any user query that's a greeting or general request for help such as 'hi' or 'hello')
 
 - Help (Any user query that's 'help' or 'I need help')
 
@@ -39,4 +39,4 @@ CATEGORIES:
 
 - Staking (Any user query that mentions issues with staking, staking rewards, unstaking, delegating or undelegating coins)
 
-- Other (Any user query that mentions the referral program, the affiliate program, the CL Card or Crypto Life Card, using Metamask or third party dapp or wallet or anything else not included in the other categories)
+- Other (Any user query that mentions the referral program, the affiliate program, the CL Card or Crypto Life Card, using Metamask or third-party dapp or wallet, or anything else not included in the other categories)
