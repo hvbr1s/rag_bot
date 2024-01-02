@@ -329,11 +329,11 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Utilisateur: \"" + enriched_issue + "\"\n" + "Assistant: " + "\n"
+                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + enriched_issue + "\"\n" + "Assistant: " + "\n"
                 elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "Пользователь: \"" + enriched_issue + "\"\n" + "Краткий ответ ассистента: " + "\n"
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + enriched_issue + "\"\n" + "Краткий ответ ассистента: " + "\n"
                 else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n-----\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n-----\n\n" + "User: \"" + enriched_issue + "\"\n" + "Assistant's short answer: " + "\n"
+                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + enriched_issue + "\"\n" + "Assistant's short answer: " + "\n"
 
                 return augmented_query
 
