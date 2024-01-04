@@ -12,7 +12,6 @@ from nostril import nonsense
 import re
 import time
 import cohere
-from typing import NamedTuple
 import asyncio
 
 
@@ -35,6 +34,9 @@ class Query(BaseModel):
     user_id: str
     user_locale: str | None = None
 
+# Define FastAPI app
+app = FastAPI()
+
 # Initialize Pinecone
 pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
@@ -55,7 +57,7 @@ def find_emails(text):
     return re.findall(email_pattern, text)
 
 # Set up address filters:
-EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b'
+EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b|\b0x[a-fA-F0-9]{64}\b'
 BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
 LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
 DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
@@ -63,9 +65,6 @@ XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
 COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
 SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
 CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
-
-# Define FastAPI app
-app = FastAPI()
 
 # Initialize user state and periodic cleanup function
 user_states = {}
@@ -98,17 +97,6 @@ async def cleanup_expired_states():
     except Exception as e:
         print(f"General error during cleanup: {e}")
 
-
-# Define FastAPI endpoints
-@app.get("/")
-async def root():
-    return {"welcome": "You've reached the home route!"}
-
-# Define server health probe
-@app.get("/_health")
-async def health_check():
-    return {"status": "OK"}
-
 # Define exception handler function
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
@@ -120,127 +108,140 @@ async def generic_exception_handler(request, exc):
 # Define supported locales for data retrieval
 SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
-# Define RAG route
+# Load localized system prompt
+def load_sysprompt(locale):
+    filename = f'system_prompt_{locale}.txt'
+    try:
+        with open(filename, 'r') as sys_file:
+            return sys_file.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
+
+# Load classifier system prompt
+def load_categories():
+    filecat = f'classifier_prompt.txt'
+    try:
+        with open(filecat, 'r') as categories:
+            return categories.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail=f"Categories not found!")
+
+# Pre-load prompts
+system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES}
+classifier_prompt = load_categories()
+
+# Define helpers functions
+def handle_nonsense(locale):
+    messages = {
+        'fr': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger.",
+        'ru': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger.",
+        'default': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses or transaction hashes. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."
+    }
+    print('Nonsense detected!')
+    return {'output': messages.get(locale, messages['default'])}
+
+def handle_crypto_email(locale, context):
+    context_dict = {
+        'crypto': {
+            'fr': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau.",
+            'ru': "Извините, но я не могу помочь с вопросами, которые включают адреса счетов криптовалюты. Пожалуйста, удалите адрес из вашего запроса и напишите ваш запрос еще раз.",
+            'default': "I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"
+        },
+        'email': {
+            'fr': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau.",
+            'ru': "Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова.",
+            'default': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."
+        }
+    }
+    print('Email or crypto address detected!')
+    return {'output': context_dict[context].get(locale, context_dict[context]['default'])}
+
+######## ROUTES ##########
+
+# Home route
+@app.get("/")
+async def root():
+    return {"welcome": "You've reached the home route!"}
+
+# Health probe
+@app.get("/_health")
+async def health_check():
+    return {"status": "OK"}
+
+# RAG route
 @app.post('/gpt')
-async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)):
+async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)): 
     user_id = query.user_id
     user_input = query.user_input.strip()
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
-
-    # Load localized system prompt
-    def load_sysprompt(locale):
-        filename = f'system_prompt_{locale}.txt'
-        try:
-            with open(filename, 'r') as sys_file:
-                return sys_file.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
-    primer = load_sysprompt(locale)
-
-    # load classifier system prompt
-    def load_categories():
-        filecat = f'classifier_prompt.txt'
-        try:
-            with open(filecat, 'r') as categories:
-                return categories.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail=f"Categories not found!")
-        
-    classifier_prompt = load_categories()
+    primer = system_prompts.get(locale, system_prompts["eng"])
 
     # Create a conversation history for new users
-    if user_id not in user_states:
-        user_states[user_id] = {
-            'previous_queries': [],
-            'timestamp': time.time()
-        }
+    convo_start = time.time()
+    user_states.setdefault(user_id, {
+        'previous_queries': [],
+        'timestamp': convo_start
+    })
 
-    # Filter out nonsense queries
+    # In the main function or wherever the logic is applied
     if not user_input or nonsense(user_input):
-        print('Nonsense detected!')
-        if locale == 'fr':
-            return {'output': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger."}
-        elif locale == 'ru':
-            return {'output': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger."}
-        else: 
-            return {'output': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
-  
-    # Filter out crypto addresses
-    if re.search(EVM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(BITCOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(LITECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(DOGECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(COSMOS_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(CARDANO_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(SOLANA_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(XRP_ADDRESS_PATTERN, user_input, re.IGNORECASE):
-        if locale == 'fr':
-            return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau."}
-        elif locale == 'ru':
-            return {'output':"Извините, но я не могу помочь с вопросами, которые включают адреса счетов криптовалюты. Пожалуйста, удалите адрес из вашего запроса и напишите ваш запрос еще раз."}
-        else:
-            return {'output':"I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"}
-    
-    # Filter out emails
-    if re.search(email_pattern, user_input):
-        if locale == 'fr':
-            return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."}
-        elif locale == 'ru':
-            return {'output':"Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова."}
-        else:
-            return{'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."}
-         
+        return handle_nonsense(locale)
+
+    patterns = {
+        'crypto': [EVM_ADDRESS_PATTERN, BITCOIN_ADDRESS_PATTERN, LITECOIN_ADDRESS_PATTERN, 
+                DOGECOIN_ADDRESS_PATTERN, COSMOS_ADDRESS_PATTERN, CARDANO_ADDRESS_PATTERN, 
+                SOLANA_ADDRESS_PATTERN, XRP_ADDRESS_PATTERN],
+        'email': [email_pattern]
+    }
+
+    for context, pattern_list in patterns.items():
+        if any(re.search(pattern, user_input, re.IGNORECASE) for pattern in pattern_list):
+            return handle_crypto_email(locale, context)
+
     else:
         
         try:
-
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
             #timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
-     
-            try:
+
+            # Prepare Cohere embeddings model based on locale
+            model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
+            print("Embedding mode: " + model)
+
+            try: 
+                
                 resp = client.chat.completions.create(
-                    temperature=0.0,
-                    model='gpt-3.5-turbo',
-                    seed=0,
-                    messages=[
-                        {"role": "system", "content": classifier_prompt},
-                        {"role": "user", "content": user_input}
-                    ],
-                    timeout=5.0,
-                    max_tokens=50,
-                )
+                        temperature=0.0,
+                        model='ft:gpt-3.5-turbo-0613:ledger::8cZVgY5Q',
+                        seed=0,
+                        messages=[
+                            {"role": "system", "content": classifier_prompt},
+                            {"role": "user", "content": user_input}
+                        ],
+                        timeout=5.0,
+                        max_tokens=50,
+                    )
                 category = resp.choices[0].message.content.lower()
+                print(category)
+        
 
-                # Define message based on locale
-                messages = {
-                    'eng': 'My issue seems to be with ',
-                    'fr': 'Mon problème semble être lié à ',
-                    'ru': 'Моя проблема, кажется, связана с '
-                }
-                message = messages.get(locale, 'My issue seems to be with ')
-                # Construct the issue and enriched issue
-                my_issue = message + category
-                print(my_issue)
-                enriched_issue = my_issue + ". " + user_input
-
-                # Filter greetings and request for human support
                 server_responses = {
                     "greetings": {
                         "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
                         "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
                         "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
-                    },
-                    "help": {
-                        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
-                        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
-                        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
-                    },
-                    "agent": {
-                        "fr": "Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !",
-                        "ru": "Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!",
-                        "eng": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"
                     }
+                    # "help": {
+                    #     "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
+                    #     "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
+                    #     "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
+                    # },
+                    # "agent": {
+                    #     "fr": "Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !",
+                    #     "ru": "Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!",
+                    #     "eng": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"
+                    # }
                 }
 
                 # Use the dictionary to get the response
@@ -249,7 +250,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
             except Exception as e:
                 print(f"An error occurred: {e}")
-                enriched_issue = user_input
                 print("Error in categorization")
 
             #############
@@ -260,12 +260,10 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                 # Prepare Cohere embeddings 
                 try:
-                 # Choose the model based on the locale
-                    model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
 
                     # Call the embedding function
                     res_embed = co.embed(
-                        texts=[enriched_issue],
+                        texts=[user_input],
                         model=model,
                         input_type='search_query'
                     )
@@ -293,9 +291,9 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                     # Rerank chunks using Cohere
                     docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
                     reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
-                    print(reranker_model)
+                    print("Reranker model: " + reranker_model)
                     rerank_docs = co.rerank(
-                        query=enriched_issue, 
+                        query=user_input, 
                         documents=docs.keys(), 
                         top_n=2, 
                         model=reranker_model
@@ -329,21 +327,21 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + enriched_issue + "\"\n" + "Assistant: " + "\n"
+                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
                 elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + enriched_issue + "\"\n" + "Краткий ответ ассистента: " + "\n"
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
                 else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + enriched_issue + "\"\n" + "Assistant's short answer: " + "\n"
+                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
 
                 return augmented_query
 
             # Start Retrieval        
-            augmented_query = await retrieve(enriched_issue)
+            augmented_query = await retrieve(user_input)
             print(augmented_query)
 
+            rag_start = time.time()
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
-
                 try: 
                     res = client.chat.completions.create(
                         temperature=0.0,
@@ -375,6 +373,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             
             # Start RAG
             response = await rag(augmented_query)
+            rag_end = time.time()
                                    
             # Save the response to a thread
             user_states[user_id] = {
