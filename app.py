@@ -56,7 +56,7 @@ email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 def find_emails(text):  
     return re.findall(email_pattern, text)
 
-# Set up address filters:
+# Set up address patterns:
 EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b|\b0x[a-fA-F0-9]{64}\b'
 BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
 LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
@@ -130,7 +130,7 @@ def load_categories():
 system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES}
 classifier_prompt = load_categories()
 
-# Define helpers functions
+# Define helpers functions & dictionaries
 def handle_nonsense(locale):
     messages = {
         'fr': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger.",
@@ -156,6 +156,29 @@ def handle_crypto_email(locale, context):
     print('Email or crypto address detected!')
     return {'output': context_dict[context].get(locale, context_dict[context]['default'])}
 
+# Set server response dictionary
+server_responses = {
+    "greetings": {
+        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
+        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
+        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
+    }
+}
+
+# Translations dictionary
+translations = {
+    'ru': '\n\nУзнайте больше на',
+    'fr': '\n\nPour en savoir plus'
+}
+
+# Patterns dictionary
+patterns = {
+    'crypto': [EVM_ADDRESS_PATTERN, BITCOIN_ADDRESS_PATTERN, LITECOIN_ADDRESS_PATTERN, 
+            DOGECOIN_ADDRESS_PATTERN, COSMOS_ADDRESS_PATTERN, CARDANO_ADDRESS_PATTERN, 
+            SOLANA_ADDRESS_PATTERN, XRP_ADDRESS_PATTERN],
+    'email': [email_pattern]
+}
+
 ######## ROUTES ##########
 
 # Home route
@@ -171,9 +194,13 @@ async def health_check():
 # RAG route
 @app.post('/gpt')
 async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)): 
+
+    # Deconstruct incoming query
     user_id = query.user_id
     user_input = query.user_input.strip()
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+
+    # Loading locale-appropriate system prompt
     primer = system_prompts.get(locale, system_prompts["eng"])
 
     # Create a conversation history for new users
@@ -183,17 +210,11 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         'timestamp': convo_start
     })
 
-    # In the main function or wherever the logic is applied
+    # Apply non sense filter
     if not user_input or nonsense(user_input):
         return handle_nonsense(locale)
 
-    patterns = {
-        'crypto': [EVM_ADDRESS_PATTERN, BITCOIN_ADDRESS_PATTERN, LITECOIN_ADDRESS_PATTERN, 
-                DOGECOIN_ADDRESS_PATTERN, COSMOS_ADDRESS_PATTERN, CARDANO_ADDRESS_PATTERN, 
-                SOLANA_ADDRESS_PATTERN, XRP_ADDRESS_PATTERN],
-        'email': [email_pattern]
-    }
-
+    # Apply email & crypto addresses filter
     for context, pattern_list in patterns.items():
         if any(re.search(pattern, user_input, re.IGNORECASE) for pattern in pattern_list):
             return handle_crypto_email(locale, context)
@@ -203,7 +224,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         try:
             # Set clock
             todays_date = datetime.now().strftime("%B %d, %Y")
-            #timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
 
             # Prepare Cohere embeddings model based on locale
             model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
@@ -225,26 +245,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 category = resp.choices[0].message.content.lower()
                 print(category)
         
-
-                server_responses = {
-                    "greetings": {
-                        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
-                        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
-                        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
-                    }
-                    # "help": {
-                    #     "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
-                    #     "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
-                    #     "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
-                    # },
-                    # "agent": {
-                    #     "fr": "Pour parler à quelqu'un du support Ledger, cliquez simplement sur le bouton 'Parler à un agent'. Bonne journée !",
-                    #     "ru": "Конечно, чтобы поговорить с кем-то из службы поддержки Ledger, просто нажмите кнопку 'Поговорить с агентом'. Хорошего дня!",
-                    #     "eng": "Certainly! To speak with someone from Ledger Support, just click on the 'Speak to an Agent' button. Have a great day!"
-                    # }
-                }
-
-                # Use the dictionary to get the response
+                # Check server response dictionary to filter undesirable categories
                 if category and category in server_responses:
                     return {"output": server_responses[category].get(locale, server_responses[category]["eng"])}
 
@@ -276,11 +277,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
                 # Prepare re-ranking with Cohere
                 try:
-                    # Translation dictionary
-                    translations = {
-                        'ru': '\n\nУзнайте больше на',
-                        'fr': '\n\nPour en savoir plus'
-                    }
 
                     # Default to English if locale not in dictionary
                     learn_more_text = translations.get(locale, '\n\nLearn more at')
@@ -316,7 +312,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                         contexts.append(context)
 
             ##########################  
-                
+                        
                 # Retrieve and format previous conversation history for a specific user_id        
                 previous_conversations = user_states[user_id].get('previous_queries', [])[-2:]  # Get the last -N conversations
 
@@ -339,7 +335,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             augmented_query = await retrieve(user_input)
             print(augmented_query)
 
-            rag_start = time.time()
             # Request and return OpenAI RAG
             async def rag(query, contexts=None):
                 try: 
@@ -373,7 +368,6 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             
             # Start RAG
             response = await rag(augmented_query)
-            rag_end = time.time()
                                    
             # Save the response to a thread
             user_states[user_id] = {
