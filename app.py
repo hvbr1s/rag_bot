@@ -143,6 +143,8 @@ patterns = {
     'email': [email_pattern]
 }
 
+######## FUNCTIONS  ##########
+
 # Function to replace crypto addresses
 def replace_crypto_address(match):
     full_address = match.group(0)
@@ -165,12 +167,145 @@ def filter_and_replace_crypto(user_input):
             user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
     return user_input
 
+# Function to generate one expanded query
+expander_system = """
+
+As a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company, your role is to provide precise answers to queries. 
+These queries are questions from Ledger customers seeking assistance
+
+"""
+async def augment_query_generated(query):
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": expander_system
+            },
+            {"role": "user", "content": query}
+        ] 
+
+        res = client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            #model='gpt-4-1106-preview',
+            temperature= 0.0,
+            messages=messages,
+        )
+        reply = res.choices[0].message.content
+        return reply
+    except Exception as e:
+        print(f"OpenAI couldn't generate an augmented query: {e}")
+        return query
+
+    
+# Retrieve and re-rank function
+async def retrieve(query, model, joint_query, locale, user_id, timestamp, user_input):
+    # Define context box
+    contexts = []
+
+    # Prepare Cohere embeddings 
+    try:
+        # Call the embedding function
+        res_embed = co.embed(
+            texts=[joint_query],
+            model=model,
+            input_type='search_query'
+        )
+    # Catch errors
+    except Exception as e:
+        print(f"Embedding failed: {e}")
+
+    # Grab the embeddings from the response object
+    xq = res_embed.embeddings
+
+    # Prepare re-ranking with Cohere
+    try:
+        # Default to English if locale not in dictionary
+        learn_more_text = translations.get(locale, '\n\nLearn more at')
+
+        # Pulls 7 chunks from Pinecone
+        res_query = index.query(xq, top_k=5, namespace=locale, include_metadata=True)
+        print(res_query)
+
+        # Rerank chunks using Cohere
+        docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+        reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
+        print("Reranker model: " + reranker_model)
+        rerank_docs = co.rerank(
+            query=query, 
+            documents=docs.keys(), 
+            top_n=2, 
+            model=reranker_model
+        )
+        reranked = rerank_docs[0].document["text"]
+        
+        # Construct the contexts
+        contexts.append(reranked)
+
+    except Exception as e:
+        print(f"Reranking failed: {e}")
+
+        # Fallback to simpler retrieval without Cohere if reranking fails
+        res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
+        sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
+
+        for idx, item in enumerate(sorted_items):
+            context = item['metadata']['text']
+            context += "\nLearn more: " + item['metadata'].get('source', 'N/A')
+            contexts.append(context)
+
+    # Retrieve and format previous conversation history for a specific user_id
+    previous_conversations = user_states[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
+
+    # Format previous conversations
+    previous_conversation = ""
+    for conv in previous_conversations:
+        previous_conversation += f"User: {conv[0]}\nAssistant: {conv[1]}\n\n"
+    
+    # Construct the augmented query string with locale, contexts, chat history, and user input
+    if locale == 'fr':
+        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+    elif locale == 'ru':
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
+    else:
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
+
+    return augmented_query
+
+# RAG function
+async def rag(primer, augmented_query):
+    try: 
+        res = client.chat.completions.create(
+            temperature=0.0,
+            #model='gpt-4',
+            model='gpt-4-1106-preview',
+            messages=[
+                {"role": "system", "content": primer},
+                {"role": "user", "content": augmented_query}
+        ])             
+        reply = res.choices[0].message.content
+        return reply
+
+    except Exception as e:
+        print(f"OpenAI completion failed: {e}")
+
+        # Fallback on Cohere chat model:
+        try:
+            res = co.chat(
+                message=augmented_query,
+                model='command',
+                preamble_override=primer,
+                temperature=0.0,
+            )
+            reply = res.text
+            return reply                   
+        except Exception as e:
+            print(f"Snap! Something went wrong, please try again!")
+            return("Snap! Something went wrong, please try again!")
+        
+
+
 ######## ROUTES ##########
 
-# Home route
-@app.get("/")
-async def root():
-    return {"Welcome human": "You've reached LedgerBot!"}
 
 # Health probe
 @app.get("/_health")
@@ -178,13 +313,12 @@ async def health_check():
     return {"status": "OK"}
 
 # RAG route
-@app.post('/gpt')
-async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)): 
+@app.post('/gpt') 
+async def react_description(query: Query): 
 
     # Deconstruct incoming query
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
-    print(user_input)
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
 
     # Loading locale-appropriate system prompt
@@ -212,121 +346,17 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
             print("Embedding mode: " + model)
 
-            #############
-                       
-            async def retrieve(query, contexts=None):
-                # Define context box
-                contexts = []
+            # Prepare enriched user query
+            hypothetical_answer = await augment_query_generated(user_input)
+            joint_query = f"{user_input} {hypothetical_answer}"
+            print(joint_query)
 
-                # Prepare Cohere embeddings 
-                try:
-
-                    # Call the embedding function
-                    res_embed = co.embed(
-                        texts=[user_input],
-                        model=model,
-                        input_type='search_query'
-                    )
-                # Catch errors
-                except Exception as e:
-                    print(f"Embedding failed: {e}")
-
-                # Grab the embeddings from the response object
-                xq = res_embed.embeddings
-
-                # Prepare re-ranking with Cohere
-                try:
-
-                    # Default to English if locale not in dictionary
-                    learn_more_text = translations.get(locale, '\n\nLearn more at')
-
-                    # Pulls 7 chunks from Pinecone
-                    res_query = index.query(xq, top_k=7, namespace=locale, include_metadata=True)
-
-                    # Rerank chunks using Cohere
-                    docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
-                    reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
-                    print("Reranker model: " + reranker_model)
-                    rerank_docs = co.rerank(
-                        query=user_input, 
-                        documents=docs.keys(), 
-                        top_n=2, 
-                        model=reranker_model
-                    )
-                    reranked = rerank_docs[0].document["text"]
-
-                    # Construct the contexts
-                    contexts.append(reranked)
-
-                except Exception as e:
-                    print(f"Reranking failed: {e}")
-
-                    # Fallback to simpler retrieval without Cohere if reranking fails
-                    res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
-                    sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
-
-                    for idx, item in enumerate(sorted_items):
-                        context = item['metadata']['text']
-                        context += "\nLearn more: " + item['metadata'].get('source', 'N/A')
-                        contexts.append(context)
-
-            ##########################  
-                        
-                # Retrieve and format previous conversation history for a specific user_id        
-                previous_conversations = user_states[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
-
-                # Format previous conversations
-                previous_conversation = ""
-                for conv in previous_conversations:
-                    previous_conversation += f"User: {conv[0]}\nAssistant: {conv[1]}\n\n"
-                
-                # Construct the augmented query string with locale, contexts, chat history, and user input
-                if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
-                elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
-                else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
-
-                return augmented_query
-
-            # Start Retrieval        
-            augmented_query = await retrieve(user_input)
+            # Start date retrieval and reranking
+            augmented_query = await retrieve(user_input, model, joint_query, locale, user_id, timestamp, user_input)
             print(augmented_query)
-
-            # Request and return OpenAI RAG
-            async def rag(query, contexts=None):
-                try: 
-                    res = client.chat.completions.create(
-                        temperature=0.0,
-                        model='gpt-4',
-                        #model='gpt-4-1106-preview',
-                        messages=[
-                            {"role": "system", "content": primer},
-                            {"role": "user", "content": augmented_query}
-                    ])             
-                    reply = res.choices[0].message.content
-                    return reply
-                
-                except Exception as e:
-                    print(f"OpenAI completion failed: {e}")
-                    
-                    # Fallback on Cohere chat model:
-                    try:
-                        res = co.chat(
-                            message=augmented_query,
-                            model='command',
-                            preamble_override=primer,
-                            temperature=0.0,
-                        )
-                        reply = res.text
-                        return reply                   
-                    except Exception as e:
-                        print(f"Snap! Something went wrong, please try again!")
-                        return("Snap! Something went wrong, please try again!")
-            
+         
             # Start RAG
-            response = await rag(augmented_query)
+            response = await rag(primer, augmented_query)
                                    
             # Save the response to a thread
             user_states[user_id] = {
@@ -334,6 +364,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 'timestamp': convo_start
             }
 
+            # Return response to user
             print("\n\n" + response + "\n\n")
             return {'output': response}
     
