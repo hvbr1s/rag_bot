@@ -1,5 +1,4 @@
 import os
-import json
 from dotenv import main
 from datetime import datetime
 import pinecone
@@ -117,18 +116,8 @@ def load_sysprompt(locale):
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
 
-# Load classifier system prompt
-def load_categories():
-    filecat = f'classifier_prompt.txt'
-    try:
-        with open(filecat, 'r') as categories:
-            return categories.read()
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail=f"Categories not found!")
-
 # Pre-load prompts
 system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES}
-classifier_prompt = load_categories()
 
 # Define helpers functions & dictionaries
 def handle_nonsense(locale):
@@ -139,31 +128,6 @@ def handle_nonsense(locale):
     }
     print('Nonsense detected!')
     return {'output': messages.get(locale, messages['default'])}
-
-def handle_crypto_email(locale, context):
-    context_dict = {
-        'crypto': {
-            'fr': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau.",
-            'ru': "Извините, но я не могу помочь с вопросами, которые включают адреса счетов криптовалюты. Пожалуйста, удалите адрес из вашего запроса и напишите ваш запрос еще раз.",
-            'default': "I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"
-        },
-        'email': {
-            'fr': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau.",
-            'ru': "Извините, но я не могу ответить на вопросы, содержащие адреса электронной почты. Пожалуйста, удалите адрес электронной почты и задайте вопрос снова.",
-            'default': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."
-        }
-    }
-    print('Email or crypto address detected!')
-    return {'output': context_dict[context].get(locale, context_dict[context]['default'])}
-
-# Set server response dictionary
-server_responses = {
-    "greetings": {
-        "fr": "Bonjour ! Comment puis-je vous aider avec vos problèmes liés à Ledger aujourd'hui ? Plus vous partagerez de détails sur votre problème, mieux je pourrai vous assister. ",
-        "ru": "Здравствуйте! Как я могу помочь вам с вашими вопросами, связанными с Ledger, сегодня? Чем больше деталей вы предоставите о вашей проблеме, тем лучше я смогу вам помочь. Пожалуйста, опишите её максимально подробно!",
-        "eng": "Hello! How can I assist you with your Ledger-related issue today? The more details you share about the problem, the better I can assist you. Feel free to describe it in as much detail as possible!"
-    }
-}
 
 # Translations dictionary
 translations = {
@@ -179,12 +143,34 @@ patterns = {
     'email': [email_pattern]
 }
 
+# Function to replace crypto addresses
+def replace_crypto_address(match):
+    full_address = match.group(0)
+    if match.lastindex is not None and match.lastindex >= 1:
+        prefix = match.group(1)  # Capture the prefix
+    else:
+        # Infer prefix based on the address pattern
+        if full_address.startswith("0x"):
+            prefix = "0x"
+        elif any(full_address.startswith(p) for p in ["L", "M", "D", "r", "cosmos", "addr1"]):
+            prefix = full_address.split('1', 1)[0] 
+        else:
+            prefix = ''
+    return prefix + 'xxxx'
+
+# Function to apply email & crypto addresses filter and replace addresses
+def filter_and_replace_crypto(user_input):
+    for ctxt, pattern_list in patterns.items():
+        for pattern in pattern_list:
+            user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
+    return user_input
+
 ######## ROUTES ##########
 
 # Home route
 @app.get("/")
 async def root():
-    return {"welcome": "You've reached the home route!"}
+    return {"Welcome human": "You've reached LedgerBot!"}
 
 # Health probe
 @app.get("/_health")
@@ -197,7 +183,8 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
 
     # Deconstruct incoming query
     user_id = query.user_id
-    user_input = query.user_input.strip()
+    user_input = filter_and_replace_crypto(query.user_input.strip())
+    print(user_input)
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
 
     # Loading locale-appropriate system prompt
@@ -210,48 +197,20 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
         'timestamp': convo_start
     })
 
-    # Apply non sense filter
+    # Apply nonsense filter
     if not user_input or nonsense(user_input):
         return handle_nonsense(locale)
-
-    # Apply email & crypto addresses filter
-    for context, pattern_list in patterns.items():
-        if any(re.search(pattern, user_input, re.IGNORECASE) for pattern in pattern_list):
-            return handle_crypto_email(locale, context)
 
     else:
         
         try:
+            
             # Set clock
-            todays_date = datetime.now().strftime("%B %d, %Y")
+            timestamp = datetime.now().strftime("%B %d, %Y")
 
             # Prepare Cohere embeddings model based on locale
             model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
             print("Embedding mode: " + model)
-
-            try: 
-                
-                resp = client.chat.completions.create(
-                        temperature=0.0,
-                        model='ft:gpt-3.5-turbo-0613:ledger::8cZVgY5Q',
-                        seed=0,
-                        messages=[
-                            {"role": "system", "content": classifier_prompt},
-                            {"role": "user", "content": user_input}
-                        ],
-                        timeout=5.0,
-                        max_tokens=50,
-                    )
-                category = resp.choices[0].message.content.lower()
-                print(category)
-        
-                # Check server response dictionary to filter undesirable categories
-                if category and category in server_responses:
-                    return {"output": server_responses[category].get(locale, server_responses[category]["eng"])}
-
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                print("Error in categorization")
 
             #############
                        
@@ -314,7 +273,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             ##########################  
                         
                 # Retrieve and format previous conversation history for a specific user_id        
-                previous_conversations = user_states[user_id].get('previous_queries', [])[-2:]  # Get the last -N conversations
+                previous_conversations = user_states[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
 
                 # Format previous conversations
                 previous_conversation = ""
@@ -323,11 +282,11 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 
                 # Construct the augmented query string with locale, contexts, chat history, and user input
                 if locale == 'fr':
-                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+                    augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
                 elif locale == 'ru':
-                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
+                    augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
                 else:
-                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + todays_date + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
+                    augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
 
                 return augmented_query
 
@@ -372,7 +331,7 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
             # Save the response to a thread
             user_states[user_id] = {
                 'previous_queries': user_states[user_id].get('previous_queries', []) + [(user_input, response)],
-                'timestamp': time.time()
+                'timestamp': convo_start
             }
 
             print("\n\n" + response + "\n\n")
