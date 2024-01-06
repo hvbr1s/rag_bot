@@ -189,6 +189,7 @@ async def augment_query_generated(query):
             #model='gpt-4-1106-preview',
             temperature= 0.0,
             messages=messages,
+            timeout=5.0,
         )
         reply = res.choices[0].message.content
         return reply
@@ -198,16 +199,18 @@ async def augment_query_generated(query):
 
     
 # Retrieve and re-rank function
-async def retrieve(query, model, joint_query, locale, user_id, timestamp, user_input):
+async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     # Define context box
     contexts = []
 
     # Prepare Cohere embeddings 
     try:
+        # Choose Cohere embeddings model based on locale
+        embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
         # Call the embedding function
         res_embed = co.embed(
             texts=[joint_query],
-            model=model,
+            model=embedding_model,
             input_type='search_query'
         )
     # Catch errors
@@ -217,19 +220,20 @@ async def retrieve(query, model, joint_query, locale, user_id, timestamp, user_i
     # Grab the embeddings from the response object
     xq = res_embed.embeddings
 
-    # Prepare re-ranking with Cohere
+    # Pulls top N chunks from Pinecone
+    res_query = index.query(xq, top_k=5, namespace=locale, include_metadata=True)
+
+    # Format docs from Pinecone
+    learn_more_text = translations.get(locale, '\n\nLearn more at')
+    docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+
+    # Try re-ranking with Cohere
     try:
-        # Default to English if locale not in dictionary
-        learn_more_text = translations.get(locale, '\n\nLearn more at')
-
-        # Pulls 7 chunks from Pinecone
-        res_query = index.query(xq, top_k=5, namespace=locale, include_metadata=True)
-        print(res_query)
-
-        # Rerank chunks using Cohere
-        docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
+        
+        # Dynamically choose reranker model based on locale
         reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
-        print("Reranker model: " + reranker_model)
+
+        # Rerank docs with Cohere
         rerank_docs = co.rerank(
             query=query, 
             documents=docs.keys(), 
@@ -238,12 +242,11 @@ async def retrieve(query, model, joint_query, locale, user_id, timestamp, user_i
         )
         reranked = rerank_docs[0].document["text"]
         
-        # Construct the contexts
+        # Construct the contexts with reranked docs
         contexts.append(reranked)
 
     except Exception as e:
         print(f"Reranking failed: {e}")
-
         # Fallback to simpler retrieval without Cohere if reranking fails
         res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
         sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
@@ -341,18 +344,14 @@ async def react_description(query: Query):
             
             # Set clock
             timestamp = datetime.now().strftime("%B %d, %Y")
-
-            # Prepare Cohere embeddings model based on locale
-            model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
-            print("Embedding mode: " + model)
-
+ 
             # Prepare enriched user query
             hypothetical_answer = await augment_query_generated(user_input)
             joint_query = f"{user_input} {hypothetical_answer}"
             print(joint_query)
 
             # Start date retrieval and reranking
-            augmented_query = await retrieve(user_input, model, joint_query, locale, user_id, timestamp, user_input)
+            augmented_query = await retrieve(user_input, joint_query, locale, user_id, timestamp, user_input)
             print(augmented_query)
          
             # Start RAG
