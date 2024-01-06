@@ -96,14 +96,6 @@ async def cleanup_expired_states():
     except Exception as e:
         print(f"General error during cleanup: {e}")
 
-# Define exception handler function
-@app.exception_handler(Exception)
-async def generic_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"message": "Snap! Something went wrong, please try again!"},
-    )
-
 # Define supported locales for data retrieval
 SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
@@ -143,7 +135,16 @@ patterns = {
     'email': [email_pattern]
 }
 
+
 ######## FUNCTIONS  ##########
+
+# Define exception handler function
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"message": "Snap! Something went wrong, please try again!"},
+    )
 
 # Function to replace crypto addresses
 def replace_crypto_address(match):
@@ -170,8 +171,18 @@ def filter_and_replace_crypto(user_input):
 # Function to generate one expanded query
 expander_system = """
 
-As a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company, your role is to provide precise answers to queries. 
-These queries are questions from Ledger customers seeking assistance
+As a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company, your role is to provide technical answers to queries. 
+
+These queries are questions from Ledger customers seeking assistance.
+
+For each query, try to come up with 2 short answers based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
+
+VERY IMPORTANT:
+
+- Solana tokens (USDC, UDTC, etc) are not supported in Ledger Live
+- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscriber
+
+Begin!
 
 """
 async def augment_query_generated(query):
@@ -221,7 +232,7 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     xq = res_embed.embeddings
 
     # Pulls top N chunks from Pinecone
-    res_query = index.query(xq, top_k=5, namespace=locale, include_metadata=True)
+    res_query = index.query(xq, top_k=7, namespace=locale, include_metadata=True)
 
     # Format docs from Pinecone
     learn_more_text = translations.get(locale, '\n\nLearn more at')
@@ -279,8 +290,8 @@ async def rag(primer, augmented_query):
     try: 
         res = client.chat.completions.create(
             temperature=0.0,
-            #model='gpt-4',
-            model='gpt-4-1106-preview',
+            model='gpt-4',
+            #model='gpt-4-1106-preview',
             messages=[
                 {"role": "system", "content": primer},
                 {"role": "user", "content": augmented_query}
@@ -345,22 +356,22 @@ async def react_description(query: Query):
             # Prepare enriched user query
             hypothetical_answer = await augment_query_generated(user_input)
             joint_query = f"{user_input} {hypothetical_answer}"
-            print(joint_query)
+            print("\n\n" + joint_query + "\n\n")
 
             # Start date retrieval and reranking
             augmented_query = await retrieve(user_input, joint_query, locale, user_id, timestamp, user_input)
-            print(augmented_query)
+            print(augmented_query + "\n\n")
          
             # Start RAG
             response = await rag(primer, augmented_query)            
-            print("\n\n" + response + "\n\n")
+            print(response + "\n\n")
                                    
             # Save the response to a thread
             user_states[user_id] = {
                 'previous_queries': user_states[user_id].get('previous_queries', []) + [(user_input, response)],
                 'timestamp': convo_start
             }
-            
+
             # Return response to user
             return {'output': response}
     
