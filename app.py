@@ -337,11 +337,8 @@ async def react_description(query: Query):
     # Apply nonsense filter
     if not user_input or nonsense(user_input):
         return handle_nonsense(locale)
-
     else:
-        
         try:
-            
             # Set clock
             timestamp = datetime.now().strftime("%B %d, %Y")
  
@@ -355,16 +352,16 @@ async def react_description(query: Query):
             print(augmented_query)
          
             # Start RAG
-            response = await rag(primer, augmented_query)
+            response = await rag(primer, augmented_query)            
+            print("\n\n" + response + "\n\n")
                                    
             # Save the response to a thread
             user_states[user_id] = {
                 'previous_queries': user_states[user_id].get('previous_queries', []) + [(user_input, response)],
                 'timestamp': convo_start
             }
-
+            
             # Return response to user
-            print("\n\n" + response + "\n\n")
             return {'output': response}
     
         except ValueError as e:
