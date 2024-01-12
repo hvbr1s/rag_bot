@@ -3,7 +3,7 @@ from dotenv import main
 from datetime import datetime
 import pinecone
 from openai import OpenAI
-from fastapi import FastAPI, Request, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
@@ -67,7 +67,7 @@ CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
 
 # Initialize user state and periodic cleanup function
 user_states = {}
-TIMEOUT_SECONDS = 600  # 10 minutes
+TIMEOUT_SECONDS = 1200  # 10 minutes
 
 async def periodic_cleanup():
     while True:
@@ -169,28 +169,28 @@ def filter_and_replace_crypto(user_input):
     return user_input
 
 # Function to generate one expanded query
-expander_system = """
+EXPANDER_PROMPT = """
+You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
 
-As a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company, your role is to provide technical answers to queries. 
+Your role is to provide technical answers to queries from Ledger customers seeking assistance.
 
-These queries are questions from Ledger customers seeking assistance.
-
-For each query, try to come up with 2 short answers based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
+For each query, try to come up with 1 short answer based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
 
 VERY IMPORTANT:
 
 - Solana tokens (USDC, UDTC, etc) are not supported in Ledger Live
-- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscriber
+- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscribers
+- If you see the error "Something went wrong" when sending or receiving coins or tokens from an account, tell the user: "you have the wrong private keys in your Ledger device".
 
 Begin!
-
 """
+
 async def augment_query_generated(query):
     try:
         messages = [
             {
                 "role": "system",
-                "content": expander_system
+                "content": EXPANDER_PROMPT
             },
             {"role": "user", "content": query}
         ] 
@@ -232,28 +232,30 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     xq = res_embed.embeddings
 
     # Pulls top N chunks from Pinecone
-    res_query = index.query(xq, top_k=7, namespace=locale, include_metadata=True)
+    res_query = index.query(xq, top_k=8, namespace=locale, include_metadata=True)
 
     # Format docs from Pinecone
     learn_more_text = translations.get(locale, '\n\nLearn more at')
-    docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
-
+    # Docs with URLs returned
+    docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A')}"} 
+        for i, x in enumerate(res_query["matches"])]
+            
     # Try re-ranking with Cohere
     try:
         
         # Dynamically choose reranker model based on locale
         reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
-        # Rerank docs with Cohere
+        # Rerank docs with Cohere and build reranked list with top N chunks
         rerank_docs = co.rerank(
             query=query, 
-            documents=docs.keys(), 
-            top_n=2, 
+            documents=docs, 
+            top_n=3, 
             model=reranker_model
         )
-        reranked = rerank_docs[0].document["text"]
         
-        # Construct the contexts with reranked docs
+        # Construct the contexts with the top reranked document
+        reranked = rerank_docs[0].document["text"]
         contexts.append(reranked)
 
     except Exception as e:
@@ -295,7 +297,9 @@ async def rag(primer, augmented_query):
             messages=[
                 {"role": "system", "content": primer},
                 {"role": "user", "content": augmented_query}
-        ])             
+            ],
+            timeout= 35.0
+        )             
         reply = res.choices[0].message.content
         return reply
 
@@ -328,7 +332,7 @@ async def health_check():
 
 # RAG route
 @app.post('/gpt') 
-async def react_description(query: Query): 
+async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
 
     # Deconstruct incoming query
     user_id = query.user_id
