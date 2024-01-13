@@ -2,8 +2,8 @@ import os
 from dotenv import main
 from datetime import datetime
 import pinecone
-from openai import OpenAI
-from fastapi import FastAPI, HTTPException, status, Depends
+from openai import AsyncOpenAI
+from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
@@ -12,6 +12,7 @@ import re
 import time
 import cohere
 import asyncio
+import httpx
 
 
 # Initialize environment variables
@@ -37,37 +38,24 @@ class Query(BaseModel):
 app = FastAPI()
 
 # Initialize Pinecone
-pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
+pinecone_key = os.environ['PINECONE_API_KEY']
+pinecone.init(api_key=pinecone_key, environment=os.environ['PINECONE_ENVIRONMENT'])
 pinecone.whoami()
 index_name = 'prod'
 index = pinecone.Index(index_name)
 
 # Initialize OpenAI client & Embedding model
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+openai_key = os.environ['OPENAI_API_KEY']
+openai_client = AsyncOpenAI(api_key=openai_key)
 embed_model = "text-embedding-ada-002"
 
 # Initialize Cohere
-os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
 co = cohere.Client(os.environ["COHERE_API_KEY"])
-
-# Initialize email address detector
-email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-def find_emails(text):  
-    return re.findall(email_pattern, text)
-
-# Set up address patterns:
-EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b|\b0x[a-fA-F0-9]{64}\b'
-BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
-LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
-DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
-XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
-COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
-SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
-CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
+cohere_key = os.environ["COHERE_API_KEY"]
 
 # Initialize user state and periodic cleanup function
-user_states = {}
-TIMEOUT_SECONDS = 1200  # 10 minutes
+USER_STATES = {}
+TIMEOUT_SECONDS = 1200  # 20 minutes
 
 async def periodic_cleanup():
     while True:
@@ -84,12 +72,12 @@ async def cleanup_expired_states():
     try:
         current_time = time.time()
         expired_users = [
-            user_id for user_id, state in user_states.items()
+            user_id for user_id, state in USER_STATES.items()
             if current_time - state['timestamp'] > TIMEOUT_SECONDS
         ]
         for user_id in expired_users:
             try:
-                del user_states[user_id]
+                del USER_STATES[user_id]
                 print("User state deleted!")
             except Exception as e:
                 print(f"Error during cleanup for user {user_id}: {e}")
@@ -127,7 +115,21 @@ translations = {
     'fr': '\n\nPour en savoir plus'
 }
 
-# Patterns dictionary
+# Initialize email address detector
+email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+def find_emails(text):  
+    return re.findall(email_pattern, text)
+
+# Set up address patterns:
+EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b|\b0x[a-fA-F0-9]{64}\b'
+BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
+LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
+DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
+XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
+COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
+SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
+CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
+
 patterns = {
     'crypto': [EVM_ADDRESS_PATTERN, BITCOIN_ADDRESS_PATTERN, LITECOIN_ADDRESS_PATTERN, 
             DOGECOIN_ADDRESS_PATTERN, COSMOS_ADDRESS_PATTERN, CARDANO_ADDRESS_PATTERN, 
@@ -137,14 +139,6 @@ patterns = {
 
 
 ######## FUNCTIONS  ##########
-
-# Define exception handler function
-@app.exception_handler(Exception)
-async def generic_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"message": "Snap! Something went wrong, please try again!"},
-    )
 
 # Function to replace crypto addresses
 def replace_crypto_address(match):
@@ -170,6 +164,7 @@ def filter_and_replace_crypto(user_input):
 
 # Function to generate one expanded query
 EXPANDER_PROMPT = """
+
 You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
 
 Your role is to provide technical answers to queries from Ledger customers seeking assistance.
@@ -183,19 +178,24 @@ VERY IMPORTANT:
 - If you see the error "Something went wrong" when sending or receiving coins or tokens from an account, tell the user: "you have the wrong private keys in your Ledger device".
 
 Begin!
+
 """
 
-async def augment_query_generated(query):
+# Augment query function
+async def augment_query_generated(user_input):
     try:
         messages = [
             {
                 "role": "system",
                 "content": EXPANDER_PROMPT
             },
-            {"role": "user", "content": query}
+            {
+                "role": "user", 
+                "content": user_input
+            }
         ] 
 
-        res = client.chat.completions.create(
+        res = await openai_client.chat.completions.create(
             model="gpt-3.5-turbo-1106",
             #model='gpt-4-1106-preview',
             temperature= 0.0,
@@ -206,7 +206,8 @@ async def augment_query_generated(query):
         return reply
     except Exception as e:
         print(f"OpenAI couldn't generate an augmented query: {e}")
-        return query
+        no_output = ""
+        return no_output
 
     
 # Retrieve and re-rank function
@@ -214,63 +215,119 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     # Define context box
     contexts = []
 
-    # Prepare Cohere embeddings 
-    try:
-        # Choose Cohere embeddings model based on locale
-        embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
-        # Call the embedding function
-        res_embed = co.embed(
-            texts=[joint_query],
-            model=embedding_model,
-            input_type='search_query'
-        )
-    # Catch errors
-    except Exception as e:
-        print(f"Embedding failed: {e}")
-
-    # Grab the embeddings from the response object
-    xq = res_embed.embeddings
-
-    # Pulls top N chunks from Pinecone
-    res_query = index.query(xq, top_k=8, namespace=locale, include_metadata=True)
-
-    # Format docs from Pinecone
-    learn_more_text = translations.get(locale, '\n\nLearn more at')
-    # Docs with URLs returned
-    docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A')}"} 
-        for i, x in enumerate(res_query["matches"])]
+    async with httpx.AsyncClient() as client:
+        # Prepare Cohere embeddings
+        try:
+            # Choose Cohere embeddings model based on locale
+            embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
             
-    # Try re-ranking with Cohere
-    try:
+            # Call the embedding function
+            embed_response = await client.post(
+                "https://api.cohere.ai/v1/embed",
+                json={
+
+                    "texts": [joint_query], 
+                    "model": embedding_model, 
+                    "input_type": "search_query",
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}"
+                },
+                timeout=20,
+            )
+
+            embed_response.raise_for_status()
+            res_embed = embed_response.json()
+            xq = res_embed['embeddings']
         
-        # Dynamically choose reranker model based on locale
-        reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
+        except Exception as e:
+            print(f"Embedding failed: {e}")
+            return(e)
 
-        # Rerank docs with Cohere and build reranked list with top N chunks
-        rerank_docs = co.rerank(
-            query=query, 
-            documents=docs, 
-            top_n=3, 
-            model=reranker_model
-        )
+        # Example Pinecone query replacement
+        try:
+            # Pull data chunks from Pinecone
+            pinecone_response = await client.post(
+                "https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io/query",
+                json={
+
+                    "vector": xq, 
+                    "topK": 8, 
+                    "namespace": locale,
+                    "includeValues": False, 
+                    "includeMetadata": True
+
+                },
+                headers={
+
+                    "Api-Key": pinecone_key,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json" 
+
+                },
+                timeout=25,
+            )
+            pinecone_response.raise_for_status()
+            res_query = pinecone_response.json()
+
+            # Format docs from Pinecone response
+            learn_more_text = translations.get(locale, '\n\nLearn more at')
+            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A')}"} 
+                for x in res_query["matches"]]
+
+
         
-        # Construct the contexts with the top reranked document
-        reranked = rerank_docs[0].document["text"]
-        contexts.append(reranked)
+        except Exception as e:
+            print(f"Pinecone query failed: {e}")
+            return
 
-    except Exception as e:
-        print(f"Reranking failed: {e}")
-        # Fallback to simpler retrieval without Cohere if reranking fails
-        res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
-        sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
+        # Try re-ranking with Cohere
+        try:
+            # Dynamically choose reranker model based on locale
+            reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
-        for idx, item in enumerate(sorted_items):
-            context = item['metadata']['text']
-            context += "\nLearn more: " + item['metadata'].get('source', 'N/A')
-            contexts.append(context)
+            # Rerank docs with Cohere
+            rerank_response = await client.post(
+                "https://api.cohere.ai/v1/rerank",
+                json={
+
+                    "model": reranker_model,
+                    "query": query, 
+                    "documents": docs, 
+                    "top_n": 3,
+                    "return_documents": True,
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}",
+
+                },
+                timeout=30,
+            )
+            rerank_response.raise_for_status()
+            rerank_docs = rerank_response.json()
+
+            # Process reranked documents
+            reranked = rerank_docs['results'][0]['document']['text']
+            contexts.append(reranked)
+
+        except Exception as e:
+            print(f"Reranking failed: {e}")
+            # Fallback to simpler retrieval without Cohere if reranking fails
+            res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
+            sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
+
+            for idx, item in enumerate(sorted_items):
+                context = item['metadata']['text']
+                context_url = "\nLearn more: " + item['metadata'].get('source', 'N/A')
+                context += context_url
+                contexts.append(context)
 
     # Retrieve and format previous conversation history for a specific user_id
-    previous_conversations = user_states[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
+    previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
 
     # Format previous conversations
     previous_conversation = ""
@@ -289,36 +346,57 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
 
 # RAG function
 async def rag(primer, augmented_query):
-    try: 
-        res = client.chat.completions.create(
-            temperature=0.0,
-            model='gpt-4',
-            #model='gpt-4-1106-preview',
-            messages=[
-                {"role": "system", "content": primer},
-                {"role": "user", "content": augmented_query}
-            ],
-            timeout= 35.0
-        )             
-        reply = res.choices[0].message.content
-        return reply
-
-    except Exception as e:
-        print(f"OpenAI completion failed: {e}")
-
-        # Fallback on Cohere chat model:
+    async with httpx.AsyncClient() as client:
         try:
-            res = co.chat(
-                message=augmented_query,
-                model='command',
-                preamble_override=primer,
+            # Request OpenAI completion
+            res = await openai_client.chat.completions.create(
                 temperature=0.0,
-            )
-            reply = res.text
-            return reply                   
+                model='gpt-4',
+                #model='gpt-4-1106-preview',
+                messages=[
+
+                    {"role": "system", "content": primer},
+                    {"role": "user", "content": augmented_query}
+
+                ],
+                timeout= 35.0
+            )             
+            reply = res.choices[0].message.content
+            return reply
+
         except Exception as e:
-            print(f"Snap! Something went wrong, please try again!")
-            return("Snap! Something went wrong, please try again!")
+            print(f"OpenAI completion failed: {e}")
+            async with httpx.AsyncClient() as client:
+                try:       
+                    command_response = await client.post(
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": "command",
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=30,
+
+                    )
+                    command_response.raise_for_status()
+                    rep = command_response.json()
+
+                    # Extract and return chat response
+                    cohere_chat = rep['text']
+                    return cohere_chat
+
+
+                except Exception as e:
+                    print(f"Snap! Something went wrong, please try again!")
+                    return("Snap! Something went wrong, please try again!")
         
 
 
@@ -344,7 +422,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
 
     # Create a conversation history for new users
     convo_start = time.time()
-    user_states.setdefault(user_id, {
+    USER_STATES.setdefault(user_id, {
         'previous_queries': [],
         'timestamp': convo_start
     })
@@ -369,13 +447,13 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             # Start RAG
             response = await rag(primer, augmented_query)            
             print(response + "\n\n")
-                                   
+
             # Save the response to a thread
-            user_states[user_id] = {
-                'previous_queries': user_states[user_id].get('previous_queries', []) + [(user_input, response)],
+            USER_STATES[user_id] = {
+                'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, response)],
                 'timestamp': convo_start
             }
-
+                                
             # Return response to user
             return {'output': response}
     
