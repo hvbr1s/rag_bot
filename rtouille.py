@@ -34,13 +34,20 @@ RAG.index(
     split_documents=True,
 )
 
+async def perform_search(query: str, k: int = 4):
+    # Perform the search using the RAG model
+    searcher = RAG.search(query=query, k=k)
+    return searcher
+
 @app.get("/ragatouille_retrieval")
 async def retrieve(query: Query):
+    
+    # Extract user input from query
     user_query = query.user_input
     print(user_query)
     
     # Run query using the RAG model
-    results = RAG.search(query=user_query, k=4)
+    results = await perform_search(user_query)
     
     # Assign the content of the first ranked item to the variable 'reply'
     reply = results[0]['content'] if results else "No results found"
