@@ -1,6 +1,6 @@
 """
 
-An implementation of the Ragtatouille search framework
+An implementation of the RAGatouille search framework
 
 """
 
