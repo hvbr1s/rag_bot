@@ -55,7 +55,7 @@ cohere_key = os.environ["COHERE_API_KEY"]
 
 # Initialize user state and periodic cleanup function
 USER_STATES = {}
-TIMEOUT_SECONDS = 1200  # 20 minutes
+TIMEOUT_SECONDS = 1800  # 30 minutes
 
 async def periodic_cleanup():
     while True:
@@ -165,17 +165,18 @@ def filter_and_replace_crypto(user_input):
 # Function to generate one expanded query
 EXPANDER_PROMPT = """
 
-You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
+You are a helpful expert crypto research assistant working for Ledger, the crypto wallet company,
 
 Your role is to provide technical answers to queries from Ledger customers seeking assistance.
 
-For each query, try to come up with 1 short answer based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
+For each query, give ONE brief answer based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
 
 VERY IMPORTANT:
 
-- Solana tokens (USDC, UDTC, etc) are not supported in Ledger Live
-- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscribers
-- If you see the error "Something went wrong" when sending or receiving coins or tokens from an account, tell the user: "you have the wrong private keys in your Ledger device".
+- Solana tokens (USDC, UDTC, etc) are not supported in Ledger Live.
+- When users mention issues swapping, they often refer to issues swapping coins (BTC to ETH, ETH to SOL, etc) via the Changelly app within Ledger Live. It's best to refer them to the article titled 'I Didn’t Receive My Crypto After Swap.'
+- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscribers.
+- If you see the exact error "Something went wrong" when sending or receiving coins or tokens from an account, tell the user: "you have the wrong private keys in your Ledger device".
 
 Begin!
 
@@ -200,7 +201,7 @@ async def augment_query_generated(user_input):
             #model='gpt-4-1106-preview',
             temperature= 0.0,
             messages=messages,
-            timeout=5.0,
+            timeout=8.0,
         )
         reply = res.choices[0].message.content
         return reply
@@ -359,7 +360,7 @@ async def rag(primer, augmented_query):
                     {"role": "user", "content": augmented_query}
 
                 ],
-                timeout= 35.0
+                timeout= 45.0
             )             
             reply = res.choices[0].message.content
             return reply
@@ -383,7 +384,7 @@ async def rag(primer, augmented_query):
                             "Authorization": f"Bearer {cohere_key}"
 
                         },
-                        timeout=30,
+                        timeout=30.0,
 
                     )
                     command_response.raise_for_status()
@@ -438,21 +439,33 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             # Prepare enriched user query
             hypothetical_answer = await augment_query_generated(user_input)
             joint_query = f"{user_input} {hypothetical_answer}"
-            print("\n\n" + joint_query + "\n\n")
+            print(joint_query)
 
             # Start date retrieval and reranking
             augmented_query = await retrieve(user_input, joint_query, locale, user_id, timestamp, user_input)
-            print(augmented_query + "\n\n")
-         
+
             # Start RAG
             response = await rag(primer, augmented_query)            
-            print(response + "\n\n")
 
             # Save the response to a thread
-            USER_STATES[user_id] = {
-                'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, response)],
-                'timestamp': convo_start
-            }
+            try:
+                USER_STATES[user_id] = {
+                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, response)],
+                    'timestamp': convo_start
+                }
+
+            except Exception as e:
+                print("Saving thread failed!")
+             
+            # Print values for debugging
+            print(
+                
+                "\n\n" + "Query: " + joint_query + "\n\n",
+                augmented_query + "\n",
+                response + "\n\n"
+                  
+            )
+
                                 
             # Return response to user
             return {'output': response}
