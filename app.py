@@ -1,9 +1,9 @@
 import os
 from dotenv import main
 from datetime import datetime
-import pinecone
+from pinecone import Pinecone
 from openai import AsyncOpenAI
-from fastapi import FastAPI, Request, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
@@ -39,10 +39,13 @@ app = FastAPI()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-pinecone.init(api_key=pinecone_key, environment=os.environ['PINECONE_ENVIRONMENT'])
-pinecone.whoami()
-index_name = 'prod'
-index = pinecone.Index(index_name)
+index_name = 'serverless-prod'
+pc_host ="https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io"
+pc = Pinecone(api_key=pinecone_key)
+index = pc.Index(
+        index_name,
+        host=pc_host
+    )
 
 # Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
@@ -216,6 +219,16 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     # Define context box
     contexts = []
 
+    # Define a dictionary to map locales to URL segments
+    locale_url_map = {
+        "fr": "/fr-fr/",
+        "ru": "/ru/",
+        # add other locales as needed
+    }
+
+    # Check if the locale is in the map, otherwise default to "/en-us/"
+    url_segment = locale_url_map.get(locale, "/en-us/")
+
     async with httpx.AsyncClient() as client:
         # Prepare Cohere embeddings
         try:
@@ -249,36 +262,67 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
 
         # Example Pinecone query replacement
         try:
-            # Pull data chunks from Pinecone
-            pinecone_response = await client.post(
-                "https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io/query",
-                json={
+            try:
+                # Pull chunks from the serverless Pinecone instance
+                pinecone_response = await client.post(
+                    "https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
+                    json={
 
-                    "vector": xq, 
-                    "topK": 8, 
-                    "namespace": locale,
-                    "includeValues": False, 
-                    "includeMetadata": True
+                        "vector": xq, 
+                        "topK": 7,
+                        "namespace": locale, 
+                        "includeValues": True, 
+                        "includeMetadata": True
 
-                },
-                headers={
+                    },
+                    headers={
 
-                    "Api-Key": pinecone_key,
-                    "Accept": "application/json",
-                    "Content-Type": "application/json" 
+                        "Api-Key": pinecone_key,
+                        "Accept": "application/json",
+                        "Content-Type": "application/json" 
 
-                },
-                timeout=25,
-            )
-            pinecone_response.raise_for_status()
-            res_query = pinecone_response.json()
+                    },
+                    timeout=10,
+                )
 
+                pinecone_response.raise_for_status()
+                res_query = pinecone_response.json()
+
+            except httpx.HTTPStatusError:
+                # Pull chunks from the legacy Pinecone fallback
+                print('Serverless response failed, falling back to legacy Pinecone')
+                try:
+                    pinecone_response = await client.post(
+                        "https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io/query",
+                        json={
+
+                            "vector": xq, 
+                            "topK": 7,
+                            "namespace": locale, 
+                            "includeValues": True, 
+                            "includeMetadata": True
+
+                        },
+                        headers={
+
+                            "Api-Key": pinecone_key,
+                            "Accept": "application/json",
+                            "Content-Type": "application/json" 
+
+                        },
+                        timeout=25,
+                    )
+
+                    pinecone_response.raise_for_status()
+                    res_query = pinecone_response.json()
+                except Exception as e:
+                    print(f"Fallback Pinecone query failed: {e}")
+                    return
+  
             # Format docs from Pinecone response
             learn_more_text = translations.get(locale, '\n\nLearn more at')
-            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A')}"} 
+            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"} 
                 for x in res_query["matches"]]
-
-
         
         except Exception as e:
             print(f"Pinecone query failed: {e}")
@@ -297,7 +341,7 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
                     "model": reranker_model,
                     "query": query, 
                     "documents": docs, 
-                    "top_n": 3,
+                    "top_n": 2,
                     "return_documents": True,
 
                 },
@@ -347,60 +391,57 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
 
 # RAG function
 async def rag(primer, augmented_query):
-    async with httpx.AsyncClient() as client:
-        try:
-            # Request OpenAI completion
-            res = await openai_client.chat.completions.create(
-                temperature=0.0,
-                model='gpt-4',
-                #model='gpt-4-1106-preview',
-                messages=[
+    try:
+        # Request OpenAI completion
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4',
+            #model='gpt-4-1106-preview',
+            messages=[
 
-                    {"role": "system", "content": primer},
-                    {"role": "user", "content": augmented_query}
+                {"role": "system", "content": primer},
+                {"role": "user", "content": augmented_query}
 
-                ],
-                timeout= 45.0
-            )             
-            reply = res.choices[0].message.content
-            return reply
+            ],
+            timeout= 45.0
+        )             
+        reply = res.choices[0].message.content
+        return reply
 
-        except Exception as e:
-            print(f"OpenAI completion failed: {e}")
-            async with httpx.AsyncClient() as client:
-                try:       
-                    command_response = await client.post(
-                        "https://api.cohere.ai/v1/chat",
-                        json={
+    except Exception as e:
+        print(f"OpenAI completion failed: {e}")
+        async with httpx.AsyncClient() as client:
+            try:       
+                command_response = await client.post(
+                    "https://api.cohere.ai/v1/chat",
+                    json={
 
-                            "message": augmented_query,
-                            "model": "command",
-                            "preamble_override": primer,
-                            "temperature": 0.0,
+                        "message": augmented_query,
+                        "model": "command",
+                        "preamble_override": primer,
+                        "temperature": 0.0,
 
-                        },
-                        headers={
+                    },
+                    headers={
 
-                            "Authorization": f"Bearer {cohere_key}"
+                        "Authorization": f"Bearer {cohere_key}"
 
-                        },
-                        timeout=30.0,
+                    },
+                    timeout=30.0,
 
-                    )
-                    command_response.raise_for_status()
-                    rep = command_response.json()
+                )
+                command_response.raise_for_status()
+                rep = command_response.json()
 
-                    # Extract and return chat response
-                    cohere_chat = rep['text']
-                    return cohere_chat
+                # Extract and return chat response
+                cohere_chat = rep['text']
+                return cohere_chat
 
 
-                except Exception as e:
-                    print(f"Snap! Something went wrong, please try again!")
-                    return("Snap! Something went wrong, please try again!")
+            except Exception as e:
+                print(f"Snap! Something went wrong, please try again!")
+                return("Snap! Something went wrong, please try again!")
         
-
-
 ######## ROUTES ##########
 
 
@@ -465,8 +506,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
                 response + "\n\n"
                   
             )
-
-                                
+                            
             # Return response to user
             return {'output': response}
     
