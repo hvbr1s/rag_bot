@@ -202,9 +202,10 @@ Here are key points to remember:
 1- Check the CHAT HISTORY to ensure the conversation doesn't exceed 4 exchanges between you and the user before calling your "Knowledge Base" API tool.
 2- ALWAYS ask if the user is getting an error message.
 3- NEVER request crypto addresses or transaction hashes/IDs.
-4- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
-5- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
-6- For issues involving a swap, it's crucial to ask which swap service the user uused (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+4- For issues related to a cryptocurrency, always inquire about the specific crypto coin or token involved and if the coin/token was transferred from an exchange. especially if the user hasn't mentioned it.
+5- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
+6- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
+7- For issues involving a swap, it's crucial to ask which swap service the user used (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
     
 After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your 'Knowledge Base' API tool. This approach helps maintain a smooth and effective conversation flow.
 
@@ -228,7 +229,8 @@ async def chat(chat):
         # Call the API to get a response
         res = await openai_client.chat.completions.create(
             temperature=0.0,
-            model='gpt-4-1106-preview',
+            #model='gpt-4-1106-preview',
+            model='gpt-3.5-turbo-1106',
             messages=messages,
             tools=tools,
             tool_choice="auto",
@@ -433,7 +435,6 @@ async def retrieve(user_input, locale):
 async def rag(primer, timestamp, user_id, chat_history, locale):
 
     res = await chat(chat_history)
-    print(res)
 
     # Check for tool_calls in the response
     if res.choices[0].message.tool_calls is not None:
