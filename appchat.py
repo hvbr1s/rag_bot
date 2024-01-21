@@ -188,7 +188,7 @@ def filter_and_replace_crypto(user_input):
             user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
     return user_input
 
-# Function to generate one expanded query
+# Function to investigate user issue
 INVESTIGATOR_PROMPT = """
 
 You are LedgerBot, an expert in cryptocurrency and helpful virtual assistant designed to support Ledger and technical queries through API integration. 
@@ -434,10 +434,6 @@ async def rag(primer, timestamp, user_id, chat_history, locale):
 
     res = await chat(chat_history)
     print(res)
-    # Extract reply content
-    if res.choices[0].message.content is not None:
-        reply = res.choices[0].message.content
-        print(reply)
 
     # Check for tool_calls in the response
     if res.choices[0].message.tool_calls is not None:
@@ -504,9 +500,10 @@ async def rag(primer, timestamp, user_id, chat_history, locale):
   
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = new_reply
         return new_reply
-
-    else:
-        print('check')
+    
+    # Extract reply content
+    elif res.choices[0].message.content is not None:
+        reply = res.choices[0].message.content
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = reply
         return reply
 
