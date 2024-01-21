@@ -141,13 +141,12 @@ patterns = {
     'email': [email_pattern]
 }
 
-# Set up tooling
-    
+# Set up tooling 
 tools = [
 {
     "type": "function",
     "function": {
-    "name": "Knowledge base",
+    "name": "knowledge",
     "description": "Technical Question API, this API makes a POST request to an external Knowledge Base with a technical question.",
     "parameters": {
         "type": "object",
@@ -159,7 +158,7 @@ tools = [
         },
         "required": ["query"],
         "async": True,
-        "implementation": "async def retrieve(query, contexts=None):"
+        "implementation": "async def knowledge(query):"
     }
     }
 }
@@ -200,7 +199,6 @@ Before utilizing your API retrieval tool, it's essential to first understand the
     
 Here are key points to remember:
 
-
 1- Check the CHAT HISTORY to ensure the conversation doesn't exceed 4 exchanges between you and the user before calling your "Knowledge Base" API tool.
 2- ALWAYS ask if the user is getting an error message.
 3- NEVER request crypto addresses or transaction hashes/IDs.
@@ -226,19 +224,51 @@ async def chat(chat):
         {"role": "system", "content":INVESTIGATOR_PROMPT},
         {"role": "user", "content": chat}
     ]
+    try:
+        # Call the API to get a response
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4-1106-preview',
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            timeout= 15.0
+        )
+        
+    except Exception as e:
+                print(f"OpenAI completion failed: {e}")
+                async with httpx.AsyncClient() as client:
+                    try:       
+                        command_response = await client.post(
+                            "https://api.cohere.ai/v1/chat",
+                            json={
 
-    # Call the API to get a response
-    res = await openai_client.chat.completions.create(
-        temperature=0.0,
-        model='gpt-4-1106-preview',
-        messages=messages,
-        tools=tools,
-        tool_choice="auto",
-        timeout= 10.0
-    )
-    
+                                "message": chat,
+                                "model": "command",
+                                "preamble_override": INVESTIGATOR_PROMPT,
+                                "temperature": 0.0,
+
+                            },
+                            headers={
+
+                                "Authorization": f"Bearer {cohere_key}"
+
+                            },
+                            timeout=30.0,
+
+                        )
+                        command_response.raise_for_status()
+                        rep = command_response.json()
+
+                        # Extract and return chat response
+                        res = rep['text']
+                        
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
     return res
-    
+
+
 # Retrieve and re-rank function
 async def retrieve(user_input, locale):
     # Define context box
