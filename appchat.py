@@ -188,6 +188,10 @@ def filter_and_replace_crypto(user_input):
             user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
     return user_input
 
+# Funtion to clean bolding from Bot's response
+async def remove_double_asterisks(response):
+    return response.replace("**", "")
+
 # Function to investigate user issue
 INVESTIGATOR_PROMPT = """
 
@@ -229,12 +233,12 @@ async def chat(chat):
         # Call the API to get a response
         res = await openai_client.chat.completions.create(
             temperature=0.0,
-            #model='gpt-4-1106-preview',
-            model='gpt-3.5-turbo-1106',
+            model='gpt-4-1106-preview',
+            #model='gpt-3.5-turbo-1106',
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            timeout= 15.0
+            timeout= 30.0
         )
         
     except Exception as e:
@@ -270,7 +274,7 @@ async def chat(chat):
                         return("Snap! Something went wrong, please try again!")
     return res
 
-
+          
 # Retrieve and re-rank function
 async def retrieve(user_input, locale):
     # Define context box
@@ -317,7 +321,7 @@ async def retrieve(user_input, locale):
             print(f"Embedding failed: {e}")
             return(e)
 
-        # Example Pinecone query replacement
+        # Query Pinecone
         try:
             try:
                 # Pull chunks from the serverless Pinecone instance
@@ -339,13 +343,13 @@ async def retrieve(user_input, locale):
                         "Content-Type": "application/json" 
 
                     },
-                    timeout=10,
+                    timeout=8,
                 )
-
                 pinecone_response.raise_for_status()
                 res_query = pinecone_response.json()
 
-            except httpx.HTTPStatusError:
+            except Exception as e:
+                print(e)
                 # Pull chunks from the legacy Pinecone fallback
                 print('Serverless response failed, falling back to legacy Pinecone')
                 try:
@@ -371,15 +375,16 @@ async def retrieve(user_input, locale):
                     )
 
                     pinecone_response.raise_for_status()
+                    print(pinecone_response)
                     res_query = pinecone_response.json()
                 except Exception as e:
                     print(f"Fallback Pinecone query failed: {e}")
                     return
   
             # Format docs from Pinecone response
-            learn_more_text = translations.get(locale, '\n\nLearn more at')
-            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"} 
-                for x in res_query["matches"]]
+            learn_more_text = ('\n\nLearn more at')
+            docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
+                    for x in res_query["matches"]]
         
         except Exception as e:
             print(f"Pinecone query failed: {e}")
@@ -427,12 +432,105 @@ async def retrieve(user_input, locale):
                 context_url = "\nLearn more: " + item['metadata'].get('source', 'N/A')
                 context += context_url
                 contexts.append(context)
+
+    return contexts
+
+
+# Legacy RAG function
+async def rag(primer, timestamp, contexts, user_id, locale, user_input):
+
+    # Retrieve and format previous conversation history for a specific user_id
+    previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
+
+    # Format previous conversations
+    previous_conversation = ""
+    for conv in previous_conversations:
+        previous_conversation += f"User: {conv[0]}\nAssistant: {conv[1]}\n\n"
+    
+    # Construct the augmented query string with locale, contexts, chat history, and user input
+    if locale == 'fr':
+        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+    elif locale == 'ru':
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Ассистента: " + "\n"
+    else:
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+
+    try:
         
-        return contexts
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4-1106-preview',
+            messages=[
 
+                {"role": "system", "content": primer},
+                {"role": "user", "content": augmented_query}
 
-# RAG function
-async def rag(primer, timestamp, user_id, chat_history, locale):
+            ],
+            timeout= 45.0
+        )             
+        reply = res.choices[0].message.content
+   
+    except Exception as e:
+        print(f"GPT4-turbo completion failed: {e}")
+        try:
+
+            res = await openai_client.chat.completions.create(
+                temperature=0.0,
+                model='gpt-4',
+                messages=[
+
+                    {"role": "system", "content": primer},
+                    {"role": "user", "content": augmented_query}
+
+                ],
+                timeout= 45.0
+            )             
+            reply = res.choices[0].message.content
+
+        except Exception as e:
+            print(f"GPT4 completion failed: {e}")
+
+            async with httpx.AsyncClient() as client:
+                try:       
+                    command_response = await client.post(
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": "command",
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=30.0,
+
+                    )
+                    command_response.raise_for_status()
+                    rep = command_response.json()
+
+                    # Extract and return chat response
+                    reply= rep['text']
+                
+
+                except Exception as e:
+                    print(f"Snap! Something went wrong, please try again!")
+                    return("Snap! Something went wrong, please try again!")
+
+    print(
+                
+                augmented_query + "\n",
+                reply + "\n\n"
+                  
+    )
+    return reply
+
+# RAG Chat Function
+async def ragchat(primer, timestamp, user_id, chat_history, locale):
 
     res = await chat(chat_history)
 
@@ -455,8 +553,8 @@ async def rag(primer, timestamp, user_id, chat_history, locale):
                 # Request OpenAI completion            
                 res = await openai_client.chat.completions.create(
                     temperature=0.0,
-                    model='gpt-4',
-                    #model='gpt-4-1106-preview',
+                    #model='gpt-4',
+                    model='gpt-4-1106-preview',
                     messages=[
 
                         {"role": "system", "content": primer},
@@ -500,15 +598,18 @@ async def rag(primer, timestamp, user_id, chat_history, locale):
                         return("Snap! Something went wrong, please try again!")
   
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = new_reply
+
         return new_reply
     
     # Extract reply content
     elif res.choices[0].message.content is not None:
         reply = res.choices[0].message.content
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = reply
+
         return reply
 
-        
+
+
 ######## ROUTES ##########
 
 
@@ -536,6 +637,74 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         'timestamp': convo_start
     })
 
+    # Apply nonsense filter
+    if not user_input or nonsense(user_input):
+        return handle_nonsense(locale)
+    else:
+        try:
+            # Set clock
+            timestamp = datetime.now().strftime("%B %d, %Y")
+
+            # Start date retrieval and reranking
+            contexts = await retrieve(user_input, locale)
+
+            # Start RAG
+            response = await rag(primer, timestamp, contexts, user_id, locale, user_input)
+
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)            
+
+            # Save the response to a thread
+            try:
+                USER_STATES[user_id] = {
+                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, cleaned_response)],
+                    'timestamp': convo_start
+                }
+
+            except Exception as e:
+                print("Saving thread failed!")
+                                         
+            # Return response to user
+            return {'output': cleaned_response}
+    
+        except ValueError as e:
+            print(e)
+            raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
+        
+        except HTTPException as e:
+            print(e)
+            # Handle known HTTP exceptions
+            return JSONResponse(
+                status_code=e.status_code,
+                content={"message": e.detail},
+            )
+        except Exception as e:
+            print(e)
+            # Handle other unexpected exceptions
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Snap! Something went wrong, please try again!"},
+            )
+        
+# RAGChat route
+@app.post('/chat') 
+async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
+
+    # Deconstruct incoming query
+    user_id = query.user_id
+    user_input = filter_and_replace_crypto(query.user_input.strip())
+    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+
+    # Loading locale-appropriate system prompt
+    primer = system_prompts.get(locale, system_prompts["eng"])
+
+    # Create a conversation history for new users
+    convo_start = time.time()
+    USER_STATES.setdefault(user_id, {
+        'previous_queries': [],
+        'timestamp': convo_start
+    })
+
     USER_STATES[user_id]['previous_queries'].append({'user': user_input})
     previous_conversations = USER_STATES[user_id]['previous_queries'][-4:]
 
@@ -546,7 +715,6 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
 
     # Construct the query string with complete chat history
     chat_history = f"CHAT HISTORY: \n\n{formatted_history.strip()}"
-    print(chat_history)
 
     # Apply nonsense filter
     if not user_input or nonsense(user_input):
@@ -558,17 +726,21 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             timestamp = datetime.now().strftime("%B %d, %Y")
 
             # Start RAG
-            response = await rag(primer, timestamp, user_id, chat_history, locale)            
+            response = await ragchat(primer, timestamp, user_id, chat_history, locale)     
 
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)
+
+            # Print for debugging
             print(
                 
-                "\n\n" + "Query: " + user_input + "\n\n",
+                chat_history + "\n",
                 response + "\n\n"
                   
-            )
+            )          
                             
             # Return response to user
-            return {'output': response}
+            return {'output': cleaned_response}
     
         except ValueError as e:
             print(e)
