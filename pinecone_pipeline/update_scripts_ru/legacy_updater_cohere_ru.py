@@ -11,8 +11,8 @@ load_dotenv()
 
 # Initialize Pinecone vars
 pinecone_key = os.environ['PINECONE_API_KEY']
-index_name = 'serverless-prod'
-pc_host = 'https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io'
+index_name = 'prod'
+pc_host = 'https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io'
 pc = Pinecone(api_key=pinecone_key)
 index = pc.Index(
         index_name,
@@ -47,14 +47,14 @@ def run_updater(json_file_path:str = None):
         try:
             res = co.embed(
                 texts=texts,
-                model='embed-english-v3.0',
+                model='embed-multilingual-v3.0',
                 input_type='search_document'
                 )
         except Exception:
             time.sleep(240)
             res = co.embed(
                 texts=texts,
-                model='embed-english-v3.0',
+                model='embed-multilingual-v3.0',
                 input_type='search_document'
                 )
 
@@ -62,7 +62,7 @@ def run_updater(json_file_path:str = None):
         to_upsert = [{'id': meta['id'], 'values': embed, 'metadata': meta} for meta, embed in zip(meta_batch, embeds)]
 
         try:
-            index.upsert(vectors=to_upsert, namespace='eng') # use to update the ENG database
+            index.upsert(vectors=to_upsert, namespace='ru') # use to update the ENG database
         except Exception as e:
             print(f"Failed to upsert the following data: {to_upsert}")
             print(f"Error: {e}")

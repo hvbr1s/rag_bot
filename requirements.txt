@@ -1,5 +1,6 @@
-openai==1.7.2
-pinecone-client
+openai==1.10.0
+pinecone-client==3.0.1
+pinecone-client[grpc]
 python-dotenv==1.0.0
 uuid
 pathlib
@@ -12,5 +13,6 @@ git+https://github.com/casics/nostril.git
 tiktoken
 bs4
 apscheduler
-cohere
+cohere==4.44
 asyncio
+langchain

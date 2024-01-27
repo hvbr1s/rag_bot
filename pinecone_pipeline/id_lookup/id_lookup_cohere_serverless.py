@@ -1,28 +1,22 @@
 import os
 import cohere
 import pinecone
+from pinecone import Pinecone
+from pinecone.grpc import PineconeGRPC 
 from dotenv import load_dotenv
 
 # Load environment variables from a .env file
 load_dotenv()
 
-def init_pinecone():
-    """
-    Initialize Pinecone with API key and environment from environment variables.
-    Returns a Pinecone Index instance.
-    """
-    # Retrieve Pinecone API key and environment from environment variables
-    api_key = os.getenv('PINECONE_API_KEY')
-    environment = os.getenv('PINECONE_ENVIRONMENT')
-
-    # Check if the necessary environment variables are set
-    if not api_key or not environment:
-        raise EnvironmentError("Pinecone API key or environment not set")
-
-    # Initialize Pinecone with the retrieved API key and environment
-    pinecone.init(api_key=api_key, environment=environment)
-    # Return a Pinecone Index instance with the name 'personal'
-    return pinecone.Index('prod')
+# Initialize Pinecone
+pinecone_key = os.environ['PINECONE_API_KEY']
+index_name = 'serverless-prod'
+pc_host ="https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io"
+pc = Pinecone(api_key=pinecone_key)
+index = pc.Index(
+        index_name,
+        host=pc_host
+    )
 
 def get_embedding(input, model="embed-english-v3.0", input_type='search_query' ):
     """
@@ -51,7 +45,12 @@ def query_pinecone(index, xq):
     Returns article ID and title.
     """
     # Query the Pinecone index with the given embedding, requesting the top match with metadata
-    res_query = index.query(xq, top_k=1, include_metadata=True, namespace='eng')
+    res_query = index.query( 
+        vector=xq, 
+        top_k=1,
+        include_metadata=True, 
+        namespace='eng'
+    )
     # Retrieve the top match from the query result
     match = res_query['matches'][0]
     # Return the article ID and title from the match metadata
@@ -59,19 +58,16 @@ def query_pinecone(index, xq):
 
 def main():
     """
-    Main function to execute the steps to delete an article.
+    Main function to execute the steps to lookup an article.
     """
-    # Initialize Pinecone and get the index instance
-    index = init_pinecone()
-
     # Set the article title or a bit of text from the article you're looking for
-    title = "TON"
+    title = "WINDOWS HELLO"
     # Get the embedding for the article link
     xq = get_embedding(title)
     # Query Pinecone to get the article ID and title using the embedding
     article_id, article_title = query_pinecone(index, xq)
 
-    # Print the title of the article to be deleted
+    # Print the title of the article
     print('Title: ' + article_title + "\n" + 'Article ID: ' + article_id)
 
 # Run the main function if the script is executed

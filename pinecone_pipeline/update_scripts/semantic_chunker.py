@@ -150,4 +150,4 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_
     return output_json_file_path
 
 if __name__ == "__main__":
-    run_chunker(chunk_size=500)
+    run_chunker(chunk_size=512)

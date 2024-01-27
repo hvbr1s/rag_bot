@@ -1,12 +1,10 @@
 import os
-import json
-from openai import OpenAI
+import cohere
 import pinecone
 from dotenv import load_dotenv
 
 # Load environment variables from a .env file
 load_dotenv()
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 def init_pinecone():
     """
@@ -26,23 +24,26 @@ def init_pinecone():
     # Return a Pinecone Index instance with the name 'personal'
     return pinecone.Index('prod')
 
-def get_embedding(link, embed_model="text-embedding-ada-002"):
+def get_embedding(input, model="embed-english-v3.0", input_type='search_query' ):
     """
     Retrieve embedding for a given link using OpenAI.
     """
-    # Retrieve OpenAI API key from environment variables
-    openai_api_key = os.getenv('OPENAI_API_KEY')
+    # Initialize Cohere
+    os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
+    co = cohere.Client(os.environ["COHERE_API_KEY"])
 
     # Check if OpenAI API key is set in environment variables
-    if not openai_api_key:
-        raise EnvironmentError("OpenAI API key not set")
+    if not co:
+        raise EnvironmentError("Cohere API key not set")
 
-    # Set OpenAI API key
-    
     # Create embedding for the given link using the specified embedding model
-    res_embed = client.embeddings.create(input=[link], engine=embed_model)
+    res_embed = co.embed(
+                texts=[input],
+                model=model,
+                input_type=input_type
+                )
     # Return the embedding data from the response
-    return res_embed['data'][0]['embedding']
+    return res_embed.embeddings
 
 def query_pinecone(index, xq):
     """
@@ -64,7 +65,7 @@ def main():
     index = init_pinecone()
 
     # Set the article title or a bit of text from the article you're looking for
-    title = "LEDGER EXTENSION FAQ"
+    title = "TEMPORARY ISSUE - FAILED TRANSACTIONS WITH ALGORAND (ALGO)"
     # Get the embedding for the article link
     xq = get_embedding(title)
     # Query Pinecone to get the article ID and title using the embedding

@@ -11,8 +11,8 @@ load_dotenv()
 
 # Initialize Pinecone vars
 pinecone_key = os.environ['PINECONE_API_KEY']
-index_name = 'serverless-prod'
-pc_host = 'https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io'
+index_name = 'prod'
+pc_host = 'https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io'
 pc = Pinecone(api_key=pinecone_key)
 index = pc.Index(
         index_name,
