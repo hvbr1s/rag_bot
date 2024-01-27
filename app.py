@@ -41,8 +41,8 @@ app = FastAPI()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-index_name = 'serverless-prod'
-pc_host ="https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io"
+index_name = 'serverless-test'
+pc_host ="https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io"
 pc = Pinecone(api_key=pinecone_key)
 index = pc.Index(
         index_name,
@@ -52,7 +52,7 @@ index = pc.Index(
 # Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
 openai_client = AsyncOpenAI(api_key=openai_key)
-embed_model = "text-embedding-ada-002"
+embed_model = "text-embedding-3-large"
 
 # Initialize Cohere
 co = cohere.Client(os.environ["COHERE_API_KEY"])
@@ -337,48 +337,58 @@ async def retrieve(user_input, locale, joint_query):
     # Check if the locale is in the map, otherwise default to "/en-us/"
     url_segment = locale_url_map.get(locale, "/en-us/")
 
-    async with httpx.AsyncClient() as client:
         # Prepare Cohere embeddings
-        try:
+    try:
             # Choose Cohere embeddings model based on locale
-            embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
+            # embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
+            
+            # # Call the embedding function
+            # embed_response = await client.post(
+            #     "https://api.cohere.ai/v1/embed",
+            #     json={
+
+            #         "texts": [joint_query], 
+            #         "model": embedding_model, 
+            #         "input_type": "search_query",
+
+            #     },
+            #     headers={
+
+            #         "Authorization": f"Bearer {cohere_key}"
+            #     },
+            #     timeout=20,
+            # )
+
+            # embed_response.raise_for_status()
+            # res_embed = embed_response.json()
+            # xq = res_embed['embeddings']
+
+            embedding_model = "text-embedding-3-large"
             
             # Call the embedding function
-            embed_response = await client.post(
-                "https://api.cohere.ai/v1/embed",
-                json={
-
-                    "texts": [joint_query], 
-                    "model": embedding_model, 
-                    "input_type": "search_query",
-
-                },
-                headers={
-
-                    "Authorization": f"Bearer {cohere_key}"
-                },
-                timeout=20,
+            res = await openai_client.embeddings.create(
+                input=joint_query, 
+                model='text-embedding-3-large',
+                dimensions=3072
             )
-
-            embed_response.raise_for_status()
-            res_embed = embed_response.json()
-            xq = res_embed['embeddings']
+            xq = res.data[0].embedding
         
-        except Exception as e:
+    except Exception as e:
             print(f"Embedding failed: {e}")
             return(e)
 
-        # Query Pinecone
+ # Query Pinecone
+    async with httpx.AsyncClient() as client:
         try:
             try:
                 # Pull chunks from the serverless Pinecone instance
                 pinecone_response = await client.post(
-                    "https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
+                    "https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
                     json={
 
                         "vector": xq, 
                         "topK": 7,
-                        "namespace": locale, 
+                        "namespace": "eng", 
                         "includeValues": True, 
                         "includeMetadata": True
 
@@ -406,7 +416,7 @@ async def retrieve(user_input, locale, joint_query):
 
                             "vector": xq, 
                             "topK": 7,
-                            "namespace": locale, 
+                            "namespace": "eng", 
                             "includeValues": True, 
                             "includeMetadata": True
 
@@ -427,10 +437,43 @@ async def retrieve(user_input, locale, joint_query):
                 except Exception as e:
                     print(f"Fallback Pinecone query failed: {e}")
                     return
+
+            # top_chunks = res_query["matches"][:2]
+
+            # docs = []
+
+            # for chunk in top_chunks:
+            #     chunk_uid = chunk["metadata"]["chunk-uid"]
+
+            #     # Query Pinecone with the chunk-uid to get all related pages
+            #     pinecone_response = await client.post(
+            #         "https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
+            #         json={
+            #             "vector": chunk_uid,  # You may need to adjust this based on how your Pinecone model interprets chunk-uids
+            #             "topK": 10,  # Adjust the number of results as needed
+            #             "namespace": locale,
+            #             "includeValues": True,
+            #             "includeMetadata": True
+            #         },
+            #         headers={
+            #             "Api-Key": pinecone_key,
+            #             "Accept": "application/json",
+            #             "Content-Type": "application/json" 
+            #         },
+            #         timeout=8,
+            #     )
+            #     pinecone_response.raise_for_status()
+            #     chunk_query_response = pinecone_response.json()
+
+            #     # Extract and organize data from the response
+            #     for page in chunk_query_response["matches"]:
+            #         docs.append({
+            #             "text": f"{page['metadata']['text']}\n\nLearn more at: {page['metadata'].get('source', 'N/A')}"
+            #         })
   
             # Format docs from Pinecone response
             learn_more_text = ('\n\nLearn more at')
-            docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
+            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
                     for x in res_query["matches"]]
         
         except Exception as e:
@@ -464,9 +507,14 @@ async def retrieve(user_input, locale, joint_query):
             rerank_response.raise_for_status()
             rerank_docs = rerank_response.json()
 
-            # Process reranked documents
-            reranked = rerank_docs['results'][0]['document']['text']
-            contexts.append(reranked)
+            # # Fetch the top reranked document
+            # reranked = rerank_docs['results'][0]['document']['text']
+            # contexts.append(reranked)
+
+            # Fetch all re-ranked documents
+            for result in rerank_docs['results']:
+                reranked = result['document']['text']
+                contexts.append(reranked)
 
         except Exception as e:
             print(f"Reranking failed: {e}")
@@ -487,7 +535,7 @@ async def retrieve(user_input, locale, joint_query):
 async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform):
 
     # Choose OpenAI model depending on where the query is coming from
-    llm = 'gpt-4-1106-preview' if platform in ["slack", "discord", "other"] else 'gpt-4'
+    llm = 'gpt-4-1106-preview' if platform in ["slack", "discord", "other"] else 'gpt-4-1106-preview'
 
     # Retrieve and format previous conversation history for a specific user_id
     previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
@@ -526,7 +574,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
 
             res = await openai_client.chat.completions.create(
                 temperature=0.0,
-                model='gpt-4-1106-preview',
+                model='gpt-4',
                 messages=[
 
                     {"role": "system", "content": primer},

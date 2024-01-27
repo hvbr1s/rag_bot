@@ -151,14 +151,14 @@ def run_scraper(output_directory_path: str = None, url_txt_file_path: str = None
         # If we're only scraping specific articles, then we only need to run the Zendesk part of the scraper
         scrape_zendesk(scraper_output_folder, article_ids_to_skip=[], scrape_these_article_ids=scrape_these_article_ids, locales=locales)
     else:
-        # scrape_zendesk(
+        scrape_zendesk(
 
-        #     scraper_output_folder, 
-        #     article_ids_to_skip=blacklist,
-        #     locales = locales
+            scraper_output_folder, 
+            article_ids_to_skip=blacklist,
+            locales = locales
             
-        # )
-        # scrape_urls(scraper_output_folder, url_txt_file_path)
+        )
+        scrape_urls(scraper_output_folder, url_txt_file_path)
         scrape_other_articles(scraper_output_folder, other_articles_directory_path)
 
 if __name__ == "__main__":

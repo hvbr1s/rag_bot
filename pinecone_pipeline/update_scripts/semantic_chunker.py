@@ -10,6 +10,9 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 import tiktoken
 
+
+embed_model ='text-embedding-3-large'
+
 ################### HC CHUNKER ######################
 class Document:
     def __init__(self, page_content, metadata):
@@ -61,8 +64,15 @@ def load_files(directory_path):
         docs.append(doc)
     return docs
 
-text_splitter = SemanticChunker(OpenAIEmbeddings())
+text_splitter = SemanticChunker(
+    OpenAIEmbeddings(
 
+        model= embed_model,
+        chunk_size= 512,
+
+    )
+
+)
 # Define the length function
 def tiktoken_len(text):
     # Initialize the tokenizer
@@ -91,7 +101,7 @@ def count_chars_in_json(file_name):
     return char_counts
 
 
-def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_overlap: int = 20, minimum_chunk_size: int = 5):
+def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_overlap: int = 0, minimum_chunk_size: int = 5):
     # Initialize the loader and load documents
     if not output_directory_path:
         pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
@@ -129,10 +139,11 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_
                         'source': doc.metadata.get('source', ''),
                         'source-type': doc.metadata.get('source-type', ''),
                         'locale': doc.metadata.get('locale', ''),
+                        'title': doc.metadata.get('title', ''),
                         'id': f'{uid}-{i}',
                         'chunk-uid': uid,
                         'chunk-page-index': i,
-                        'text': chunk_text 
+                        'text': chunk_text,
                         }
                     chunk_list.append(entry)
             except IndexError as e:
