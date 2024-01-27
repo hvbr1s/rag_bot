@@ -2,33 +2,24 @@ import os
 import json
 from dotenv import main
 from datetime import datetime
-import pinecone
-from openai import OpenAI
-from fastapi import FastAPI, Request, HTTPException, status, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, TypeAdapter
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from fastapi import BackgroundTasks
+from pinecone import Pinecone
+from openai import AsyncOpenAI
+from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
-from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-from cohere.responses.classify import Example
 from nostril import nonsense
-import tiktoken
 import re
 import time
 import cohere
 import asyncio
-from typing import NamedTuple
+import httpx
 
 
 # Initialize environment variables
 main.load_dotenv()
 
-# Initialize backend
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+# Initialize backend & API keys
 server_api_key=os.environ['BACKEND_API_KEY'] 
 API_KEY_NAME=os.environ['API_KEY_NAME'] 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -44,374 +35,712 @@ class Query(BaseModel):
     user_id: str
     user_locale: str | None = None
 
-# Initialize Pinecone
-pinecone.init(api_key=os.environ['PINECONE_API_KEY'], environment=os.environ['PINECONE_ENVIRONMENT'])
-pinecone.whoami()
-index_name = 'prod'
-index = pinecone.Index(index_name)
-
-# Initialize Cohere
-os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
-co = cohere.Client(os.environ["COHERE_API_KEY"])
-
-# Initialize and load Cohere classifier categories
-Example = NamedTuple("Example", [("text", str), ("label", str)])
-
-def load_examples():
-    filecat = f'examples.json'
-    try:
-        with open(filecat, 'r') as file:
-            examples_list = json.load(file)
-            return [Example(**ex) for ex in examples_list]
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Examples file not found!")
-
-examples = load_examples()
-
-# Email address detector
-email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-def find_emails(text):  
-    return re.findall(email_pattern, text)
-
-# Set up address filters:
-ETHEREUM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b'
-BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
-LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
-DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
-XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
-COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
-SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
-
-# Initialize tokenizer and create length function
-tokenizer = tiktoken.get_encoding('cl100k_base')
-def tiktoken_len(text):
-    tokens = tokenizer.encode(
-        text,
-        disallowed_special=()
-    )
-    return len(tokens)
-
-async def get_user_id(request: Request):
-    try:
-        body = TypeAdapter(Query).validate_python(await request.json())
-        user_id = body.user_id
-        return user_id
-    except Exception as e:
-        return get_remote_address(request)
-
 # Define FastAPI app
 app = FastAPI()
 
-# Define rate-limiter
-limiter = Limiter(key_func=get_user_id)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
-
-@app.exception_handler(RateLimitExceeded)
-async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content={"detail": "Too many requests, please try again in a minute."},
+# Initialize Pinecone
+pinecone_key = os.environ['PINECONE_API_KEY']
+index_name = 'serverless-prod'
+pc_host ="https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io"
+pc = Pinecone(api_key=pinecone_key)
+index = pc.Index(
+        index_name,
+        host=pc_host
     )
 
+# Initialize OpenAI client & Embedding model
+openai_key = os.environ['OPENAI_API_KEY']
+openai_client = AsyncOpenAI(api_key=openai_key)
+embed_model = "text-embedding-ada-002"
+
+# Initialize Cohere
+co = cohere.Client(os.environ["COHERE_API_KEY"])
+cohere_key = os.environ["COHERE_API_KEY"]
+
 # Initialize user state and periodic cleanup function
-user_states = {}
-TIMEOUT_SECONDS = 1 * 25 * 60  # 25 minutes
+USER_STATES = {}
+TIMEOUT_SECONDS = 1800  # 30 minutes
 
 async def periodic_cleanup():
     while True:
         await cleanup_expired_states()
         await asyncio.sleep(TIMEOUT_SECONDS)
 
-# Invoke periodic cleanup
+# Improved startup event to use asyncio.create_task for the continuous background task
 @app.on_event("startup")
 async def startup_event():
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(periodic_cleanup)
+    asyncio.create_task(periodic_cleanup())
 
-# Handle cleanup crashes gracefully
+# Enhanced cleanup function with improved error logging
 async def cleanup_expired_states():
     try:
         current_time = time.time()
         expired_users = [
-            user_id for user_id, state in user_states.items()
+            user_id for user_id, state in USER_STATES.items()
             if current_time - state['timestamp'] > TIMEOUT_SECONDS
         ]
         for user_id in expired_users:
-            del user_states[user_id]
+            try:
+                del USER_STATES[user_id]
+                print("User state deleted!")
+            except Exception as e:
+                print(f"Error during cleanup for user {user_id}: {e}")
     except Exception as e:
-        print(f"Error during cleanup: {e}")
-
-
-# Define FastAPI endpoints
-@app.get("/")
-async def root():
-    return {"welcome": "You've reached the home route!"}
-
-# Define server health probe
-@app.get("/_health")
-async def health_check():
-    return {"status": "OK"}
-
-# Define exception handler function
-@app.exception_handler(Exception)
-async def generic_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"message": "Snap! Something went wrong, please try again!"},
-    )
+        print(f"General error during cleanup: {e}")
 
 # Define supported locales for data retrieval
 SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
 
-# Define RAG route
-@app.post('/gpt')
-@limiter.limit("100/minute")
-async def react_description(query: Query, request: Request, api_key: str = Depends(get_api_key)):
-    user_id = query.user_id
-    user_input = query.user_input.strip()
-    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+# Load localized system prompt
+def load_sysprompt(locale):
+    filename = f'system_prompt_{locale}.txt'
+    try:
+        with open(filename, 'r') as sys_file:
+            return sys_file.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
 
-    def load_sysprompt(locale):
-        filename = f'system_prompt_{locale}.txt'
-        try:
-            with open(filename, 'r') as sys_file:
-                return sys_file.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail=f"System primer file for {locale} not found")
+# Pre-load prompts
+system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES}
 
-    primer = load_sysprompt(locale)
+# Define helpers functions & dictionaries
+def handle_nonsense(locale):
+    messages = {
+        'fr': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger.",
+        'ru': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger.",
+        'default': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses or transaction hashes. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."
+    }
+    print('Nonsense detected!')
+    return {'output': messages.get(locale, messages['default'])}
 
-    if user_id not in user_states:
-        user_states[user_id] = {
-            'previous_queries': [],
-            'timestamp': time.time()
+# Translations dictionary
+translations = {
+    'ru': '\n\nУзнайте больше на',
+    'fr': '\n\nPour en savoir plus'
+}
+
+# Initialize email address detector
+email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+def find_emails(text):  
+    return re.findall(email_pattern, text)
+
+# Set up address patterns:
+EVM_ADDRESS_PATTERN = r'\b0x[a-fA-F0-9]{40}\b|\b0x[a-fA-F0-9]{64}\b'
+BITCOIN_ADDRESS_PATTERN = r'\b(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}\b|bc1[a-zA-Z0-9]{25,90}\b'
+LITECOIN_ADDRESS_PATTERN = r'\b(L|M)[a-km-zA-HJ-NP-Z1-9]{26,34}\b'
+DOGECOIN_ADDRESS_PATTERN = r'\bD{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}\b'
+XRP_ADDRESS_PATTERN = r'\br[a-zA-Z0-9]{24,34}\b'
+COSMOS_ADDRESS_PATTERN = r'\bcosmos[0-9a-z]{38,45}\b'
+SOLANA_ADDRESS_PATTERN= r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
+CARDANO_ADDRESS_PATTERN = r'\baddr1[0-9a-z]{58}\b'
+
+patterns = {
+    'crypto': [EVM_ADDRESS_PATTERN, BITCOIN_ADDRESS_PATTERN, LITECOIN_ADDRESS_PATTERN, 
+            DOGECOIN_ADDRESS_PATTERN, COSMOS_ADDRESS_PATTERN, CARDANO_ADDRESS_PATTERN, 
+            SOLANA_ADDRESS_PATTERN, XRP_ADDRESS_PATTERN],
+    'email': [email_pattern]
+}
+
+# Set up tooling 
+tools = [
+{
+    "type": "function",
+    "function": {
+    "name": "knowledge",
+    "description": "Technical Question API, this API makes a POST request to an external Knowledge Base with a technical question.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+        "query": {
+            "type": "string",
+            "description": "The user's technical question."
         }
+        },
+        "required": ["query"],
+        "async": True,
+        "implementation": "async def knowledge(query):"
+    }
+    }
+}
+]
 
-    if not user_input or nonsense(user_input):
-        print('Nonsense detected!')
-        if locale == "fr":
-            return {'output': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger."}
-        else: 
-            return {'output': "I'm sorry, I cannot understand your question, and I can't assist with questions that include cryptocurrency addresses. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."}
-  
+######## FUNCTIONS  ##########
 
-    if re.search(ETHEREUM_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(BITCOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(LITECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(DOGECOIN_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(COSMOS_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(SOLANA_ADDRESS_PATTERN, user_input, re.IGNORECASE) or \
-           re.search(XRP_ADDRESS_PATTERN, user_input, re.IGNORECASE):
-        if locale == 'fr':
-            return {'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Veuillez retirer l'adresse et poser la question à nouveau."}
-        else:
-            return {'output':"I'm sorry, but I can't assist with questions that include cryptocurrency addresses. Please remove the address and ask again"}
-    
-    if re.search(email_pattern, user_input):
-        if locale == 'fr':
-            return {
-            'output': "Je suis désolé, mais je ne peux pas aider avec des questions qui incluent des adresses e-mail. Veuillez retirer l'adresse et poser la question à nouveau."
-                }
-        else:
-            return{
-                'output': "I'm sorry, but I can't assist with questions that include email addresses. Please remove the address and ask again."
-            }
-    
+# Function to replace crypto addresses
+def replace_crypto_address(match):
+    full_address = match.group(0)
+    if match.lastindex is not None and match.lastindex >= 1:
+        prefix = match.group(1)  # Capture the prefix
     else:
+        # Infer prefix based on the address pattern
+        if full_address.startswith("0x"):
+            prefix = "0x"
+        elif any(full_address.startswith(p) for p in ["L", "M", "D", "r", "cosmos", "addr1"]):
+            prefix = full_address.split('1', 1)[0] 
+        else:
+            prefix = ''
+    return prefix + 'xxxx'
+
+# Function to apply email & crypto addresses filter and replace addresses
+def filter_and_replace_crypto(user_input):
+    for ctxt, pattern_list in patterns.items():
+        for pattern in pattern_list:
+            user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
+    return user_input
+
+# Funtion to clean bolding from Bot's response
+async def remove_double_asterisks(response):
+    return response.replace("**", "")
+
+# Function to investigate user issue
+INVESTIGATOR_PROMPT = """
+
+You are LedgerBot, an expert in cryptocurrency and helpful virtual assistant designed to support Ledger and technical queries through API integration. 
+                    
+When a user asks any question about Ledger products or anything related to Ledger's ecosystem, you will ALWAYS use your "Knowledge Base" tool to initiate an API call to an external service.
+
+Before utilizing your API retrieval tool, it's essential to first understand the user's issue. This requires asking follow-up questions. 
+    
+Here are key points to remember:
+
+1- Check the CHAT HISTORY to ensure the conversation doesn't exceed 4 exchanges between you and the user before calling your "Knowledge Base" API tool.
+2- ALWAYS ask if the user is getting an error message.
+3- NEVER request crypto addresses or transaction hashes/IDs.
+4- For issues related to a cryptocurrency, always inquire about the specific crypto coin or token involved and if the coin/token was transferred from an exchange. especially if the user hasn't mentioned it.
+5- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
+6- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
+7- For issues involving a swap, it's crucial to ask which swap service the user used (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+    
+After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your 'Knowledge Base' API tool. This approach helps maintain a smooth and effective conversation flow.
+
+ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
+
+If a user needs to contact Ledger Support, they can do so at https://support.ledger.com/
+
+NEVER use your API tool when a user simply thank you or greet you!
+
+Take a deep breath, I'll tip you $200 dollars if you do a good job!
+
+"""
+
+async def chat(chat):
+    # Define the initial messages with the system's instructions
+    messages = [
+        {"role": "system", "content":INVESTIGATOR_PROMPT},
+        {"role": "user", "content": chat}
+    ]
+    try:
+        # Call the API to get a response
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4-1106-preview',
+            #model='gpt-3.5-turbo-1106',
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            timeout= 30.0
+        )
         
+    except Exception as e:
+                print(f"OpenAI completion failed: {e}")
+                async with httpx.AsyncClient() as client:
+                    try:       
+                        command_response = await client.post(
+                            "https://api.cohere.ai/v1/chat",
+                            json={
+
+                                "message": chat,
+                                "model": "command",
+                                "preamble_override": INVESTIGATOR_PROMPT,
+                                "temperature": 0.0,
+
+                            },
+                            headers={
+
+                                "Authorization": f"Bearer {cohere_key}"
+
+                            },
+                            timeout=30.0,
+
+                        )
+                        command_response.raise_for_status()
+                        rep = command_response.json()
+
+                        # Extract and return chat response
+                        res = rep['text']
+                        
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
+    return res
+
+          
+# Retrieve and re-rank function
+async def retrieve(user_input, locale):
+    # Define context box
+    contexts = []
+
+    # Define a dictionary to map locales to URL segments
+    locale_url_map = {
+        "fr": "/fr-fr/",
+        "ru": "/ru/",
+        # add other locales as needed
+    }
+
+    # Check if the locale is in the map, otherwise default to "/en-us/"
+    url_segment = locale_url_map.get(locale, "/en-us/")
+
+    async with httpx.AsyncClient() as client:
+        # Prepare Cohere embeddings
+        try:
+            # Choose Cohere embeddings model based on locale
+            embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
+            
+            # Call the embedding function
+            embed_response = await client.post(
+                "https://api.cohere.ai/v1/embed",
+                json={
+
+                    "texts": [user_input], 
+                    "model": embedding_model, 
+                    "input_type": "search_query",
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}"
+                },
+                timeout=20,
+            )
+
+            embed_response.raise_for_status()
+            res_embed = embed_response.json()
+            xq = res_embed['embeddings']
+        
+        except Exception as e:
+            print(f"Embedding failed: {e}")
+            return(e)
+
+        # Query Pinecone
+        try:
+            try:
+                # Pull chunks from the serverless Pinecone instance
+                pinecone_response = await client.post(
+                    "https://serverless-prod-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
+                    json={
+
+                        "vector": xq, 
+                        "topK": 7,
+                        "namespace": locale, 
+                        "includeValues": True, 
+                        "includeMetadata": True
+
+                    },
+                    headers={
+
+                        "Api-Key": pinecone_key,
+                        "Accept": "application/json",
+                        "Content-Type": "application/json" 
+
+                    },
+                    timeout=8,
+                )
+                pinecone_response.raise_for_status()
+                res_query = pinecone_response.json()
+
+            except Exception as e:
+                print(e)
+                # Pull chunks from the legacy Pinecone fallback
+                print('Serverless response failed, falling back to legacy Pinecone')
+                try:
+                    pinecone_response = await client.post(
+                        "https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io/query",
+                        json={
+
+                            "vector": xq, 
+                            "topK": 7,
+                            "namespace": locale, 
+                            "includeValues": True, 
+                            "includeMetadata": True
+
+                        },
+                        headers={
+
+                            "Api-Key": pinecone_key,
+                            "Accept": "application/json",
+                            "Content-Type": "application/json" 
+
+                        },
+                        timeout=25,
+                    )
+
+                    pinecone_response.raise_for_status()
+                    print(pinecone_response)
+                    res_query = pinecone_response.json()
+                except Exception as e:
+                    print(f"Fallback Pinecone query failed: {e}")
+                    return
+  
+            # Format docs from Pinecone response
+            learn_more_text = ('\n\nLearn more at')
+            docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
+                    for x in res_query["matches"]]
+        
+        except Exception as e:
+            print(f"Pinecone query failed: {e}")
+            return
+
+        # Try re-ranking with Cohere
+        try:
+            # Dynamically choose reranker model based on locale
+            reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
+
+            # Rerank docs with Cohere
+            rerank_response = await client.post(
+                "https://api.cohere.ai/v1/rerank",
+                json={
+
+                    "model": reranker_model,
+                    "query": user_input, 
+                    "documents": docs, 
+                    "top_n": 2,
+                    "return_documents": True,
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}",
+
+                },
+                timeout=30,
+            )
+            rerank_response.raise_for_status()
+            rerank_docs = rerank_response.json()
+
+            # Process reranked documents
+            reranked = rerank_docs['results'][0]['document']['text']
+            contexts.append(reranked)
+
+        except Exception as e:
+            print(f"Reranking failed: {e}")
+            # Fallback to simpler retrieval without Cohere if reranking fails
+            res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
+            sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
+
+            for idx, item in enumerate(sorted_items):
+                context = item['metadata']['text']
+                context_url = "\nLearn more: " + item['metadata'].get('source', 'N/A')
+                context += context_url
+                contexts.append(context)
+
+    return contexts
+
+
+# Legacy RAG function
+async def rag(primer, timestamp, contexts, user_id, locale, user_input):
+
+    # Retrieve and format previous conversation history for a specific user_id
+    previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
+
+    # Format previous conversations
+    previous_conversation = ""
+    for conv in previous_conversations:
+        previous_conversation += f"User: {conv[0]}\nAssistant: {conv[1]}\n\n"
+    
+    # Construct the augmented query string with locale, contexts, chat history, and user input
+    if locale == 'fr':
+        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+    elif locale == 'ru':
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Ассистента: " + "\n"
+    else:
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+
+    try:
+        
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4-1106-preview',
+            messages=[
+
+                {"role": "system", "content": primer},
+                {"role": "user", "content": augmented_query}
+
+            ],
+            timeout= 45.0
+        )             
+        reply = res.choices[0].message.content
+   
+    except Exception as e:
+        print(f"GPT4-turbo completion failed: {e}")
         try:
 
-            # Set clock
-            todays_date = datetime.now().strftime("%B %d, %Y")
-            timestamp = datetime.now().strftime("%B %d, %Y %H:%M:%S")
+            res = await openai_client.chat.completions.create(
+                temperature=0.0,
+                model='gpt-4',
+                messages=[
 
-            # Prepare tooling for the bot
-            tools = [
-            {
-                "type": "function",
-                "function": {
-                "name": "retrieve",
-                "description": "Technical Question API, this API makes a POST request to an external service with a technical question and user identifier.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The user's technical question."
-                    }
-                    },
-                    "required": ["query"],
-                    "async": True,
-                    "implementation": "async def retrieve(query, contexts=None):"
-                }
-                }
-            }
-            ]
-
-            # Categorize the query with Cohere
-            try:
-                res = co.classify(
-                    inputs=[user_input],
-                    examples=examples,
-                )
-                prediction = res.classifications
-                category = prediction[0].predictions[0]
-            except Exception as e:
-                print(f"Classification failed: {e}")
-                category = 'Could not categorize'
-            print(category)
-  
-            ##################################
-                       
-            async def retrieve(query, contexts=None):
-                # Prepare context box
-                contexts = []
-
-                # Prepare Cohere embeddings 
-                try:
-                    # Choose the model based on the locale
-                    model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
-
-                    # Call the embedding function
-                    res_embed = co.embed(
-                        texts=[query],
-                        model=model,
-                        input_type='search_query'
-                    )
-
-                # Grab the embeddings from the response object
-                except Exception as e:
-                    print(f"Embedding failed: {e}")
-                xq = res_embed.embeddings
-
-                try:
-                    # Translation dictionary
-                    translations = {
-                        'ru': '\n\nУзнайте больше на',
-                        'fr': '\n\nPour en savoir plus'
-                    }
-
-                    # Default to English if locale not in dictionary
-                    learn_more_text = translations.get(locale, '\n\nLearn more at')
-
-                    # Pulls 7 chunks from Pinecone
-                    res_query = index.query(xq, top_k=7, namespace=locale, include_metadata=True)
-
-                    # Rerank chunks using Cohere
-                    docs = {x["metadata"]['text'] + learn_more_text + ": " + x["metadata"].get('source', 'N/A'): i for i, x in enumerate(res_query["matches"])}
-                    rerank_docs = co.rerank(
-                        query=query, 
-                        documents=docs.keys(), 
-                        top_n=2, 
-                        model="rerank-english-v2.0"
-                    )
-                    reranked = rerank_docs[0].document["text"]
-
-                    # Construct the contexts
-                    contexts.append(reranked)
-                    return contexts
-
-                except Exception as e:
-                    return(f"Reranking failed: {e}")
-
-
-            ########################################################### 
-                
-            # Retrieve and format the entire conversation history for a specific user_id
-            user_states.setdefault(user_id, {'previous_queries': [], 'timestamp': time.time()})
-            user_states[user_id]['previous_queries'].append({'user': user_input})
-            previous_conversations = user_states[user_id]['previous_queries'][-4:]
-
-            # Format previous conversations for RAG
-            formatted_history = ""
-            for conv in previous_conversations:
-                formatted_history += f"User: {conv.get('user', '')}\nAssistant: {conv.get('assistant', '')}\n"
-
-            # Construct the query string with complete chat history
-            augmented_query = f"CHAT HISTORY: \n\n{formatted_history.strip()}"
-            print(augmented_query)
-
-            
-            # Start RAG with full history
-            async def rag(query, contexts=None):
-                messages =  [
-                    {"role": "system", "content": """
-                    
-                    You are SamanthaBot, an expert in cryptocurrency and helpful virtual assistant designed to support Ledger and technical queries through API integration. 
-                    
-                    When a user asks any question about Ledger products or anything related to Ledger's ecosystem, you will ALWAYS use the "retrieve" tool initiate an API call to an external service.
-
-                    Before utilizing your API retrieval tool, it's essential to first understand the user's issue. This requires asking follow-up questions. Here are key points to remember:
-
-                    1- Limit yourself to a maximum of 2 follow-up questions.
-                    2- Ensure the conversation doesn't exceed 3 exchanges between you and the user.
-                    3- Never request crypto addresses or transaction hashes/IDs.
-
-                   After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your API tool. This approach helps maintain a smooth and effective conversation flow.
-
-                    ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
-
-                    If a user needs to contact Ledger Support, they can do so at https://support.ledger.com/
-
-                    Never use your API tool when a user simply thank you or greet you!
-
-                    Take a deep breath, and begin!
-                    
-                    """},
+                    {"role": "system", "content": primer},
                     {"role": "user", "content": augmented_query}
-                ]
-                res = client.chat.completions.create(
+
+                ],
+                timeout= 45.0
+            )             
+            reply = res.choices[0].message.content
+
+        except Exception as e:
+            print(f"GPT4 completion failed: {e}")
+
+            async with httpx.AsyncClient() as client:
+                try:       
+                    command_response = await client.post(
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": "command",
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=30.0,
+
+                    )
+                    command_response.raise_for_status()
+                    rep = command_response.json()
+
+                    # Extract and return chat response
+                    reply= rep['text']
+                
+
+                except Exception as e:
+                    print(f"Snap! Something went wrong, please try again!")
+                    return("Snap! Something went wrong, please try again!")
+
+    print(
+                
+                augmented_query + "\n",
+                reply + "\n\n"
+                  
+    )
+    return reply
+
+# RAG Chat Function
+async def ragchat(primer, timestamp, user_id, chat_history, locale):
+
+    res = await chat(chat_history)
+
+    # Check for tool_calls in the response
+    if res.choices[0].message.tool_calls is not None:
+        print("Calling API!")
+        tool_call_arguments = json.loads(res.choices[0].message.tool_calls[0].function.arguments)
+
+        # Extract query
+        function_call_query = tool_call_arguments["query"]
+
+        # Use this extracted query to call the retrieve function
+        retrieved_context = await retrieve(function_call_query, locale)
+        retrieved_context_string = retrieved_context[0]
+        if retrieved_context:
+            troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context_string + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
+            print(troubleshoot_instructions)
+            # Make a new completion call with the retrieved context
+            try:
+                # Request OpenAI completion            
+                res = await openai_client.chat.completions.create(
                     temperature=0.0,
                     #model='gpt-4',
                     model='gpt-4-1106-preview',
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto"
-                )
-                print(res)
-                # Extract reply content
-                if res.choices[0].message.content is not None:
-                    reply = res.choices[0].message.content
-                else:
-                    print("Calling API!")
+                    messages=[
 
-                # Check for tool_calls in the response
-                if res.choices[0].message.tool_calls is not None:
-                    tool_call_arguments = json.loads(res.choices[0].message.tool_calls[0].function.arguments)
+                        {"role": "system", "content": primer},
+                        {"role": "user", "content": troubleshoot_instructions}
 
-                    # Extract query
-                    function_call_query = tool_call_arguments["query"]
+                    ],
+                    timeout= 45.0
+                )             
+                new_reply = res.choices[0].message.content
+        
+            except Exception as e:
+                print(f"OpenAI completion failed: {e}")
+                async with httpx.AsyncClient() as client:
+                    try:       
+                        command_response = await client.post(
+                            "https://api.cohere.ai/v1/chat",
+                            json={
 
-                    # Use this extracted query to call the retrieve function
-                    retrieved_context = await retrieve(function_call_query)
-                    retrieved_context_string = retrieved_context[0]
-                    if retrieved_context:
-                        troubleshoot_instructions = "CONTEXT: " + "\n" + todays_date + " ." + retrieved_context_string + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
-                        print(troubleshoot_instructions)
-                        # Make a new completion call with the retrieved context
-                        res = client.chat.completions.create(
-                            temperature=0.0,
-                            #model='gpt-4-1106-preview',
-                            model='gpt-4',
-                            messages=[
-                                {"role": "system", "content": primer},
-                                {"role": "user", "content": troubleshoot_instructions}
-                            ]
+                                "message": troubleshoot_instructions,
+                                "model": "command",
+                                "preamble_override": primer,
+                                "temperature": 0.0,
+
+                            },
+                            headers={
+
+                                "Authorization": f"Bearer {cohere_key}"
+
+                            },
+                            timeout=30.0,
+
                         )
-                        new_reply = res.choices[0].message.content
-                    user_states[user_id]['previous_queries'][-1]['assistant'] = new_reply
-                    return new_reply
+                        command_response.raise_for_status()
+                        rep = command_response.json()
 
-                else:
-                    user_states[user_id]['previous_queries'][-1]['assistant'] = reply
-                    return reply
-            
+                        # Extract and return chat response
+                        new_reply = rep['text']
+                        
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
+  
+        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = new_reply
+
+        return new_reply
+    
+    # Extract reply content
+    elif res.choices[0].message.content is not None:
+        reply = res.choices[0].message.content
+        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = reply
+
+        return reply
+
+
+
+######## ROUTES ##########
+
+
+# Health probe
+@app.get("/_health")
+async def health_check():
+    return {"status": "OK"}
+
+# RAG route
+@app.post('/gpt') 
+async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
+
+    # Deconstruct incoming query
+    user_id = query.user_id
+    user_input = filter_and_replace_crypto(query.user_input.strip())
+    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+
+    # Loading locale-appropriate system prompt
+    primer = system_prompts.get(locale, system_prompts["eng"])
+
+    # Create a conversation history for new users
+    convo_start = time.time()
+    USER_STATES.setdefault(user_id, {
+        'previous_queries': [],
+        'timestamp': convo_start
+    })
+
+    # Apply nonsense filter
+    if not user_input or nonsense(user_input):
+        return handle_nonsense(locale)
+    else:
+        try:
+            # Set clock
+            timestamp = datetime.now().strftime("%B %d, %Y")
+
+            # Start date retrieval and reranking
+            contexts = await retrieve(user_input, locale)
+
             # Start RAG
-            response = await rag(augmented_query)             
-            print("\n\n" + response + "\n\n")
-            return {'output': response}
+            response = await rag(primer, timestamp, contexts, user_id, locale, user_input)
+
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)            
+
+            # Save the response to a thread
+            try:
+                USER_STATES[user_id] = {
+                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, cleaned_response)],
+                    'timestamp': convo_start
+                }
+
+            except Exception as e:
+                print("Saving thread failed!")
+                                         
+            # Return response to user
+            return {'output': cleaned_response}
+    
+        except ValueError as e:
+            print(e)
+            raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
+        
+        except HTTPException as e:
+            print(e)
+            # Handle known HTTP exceptions
+            return JSONResponse(
+                status_code=e.status_code,
+                content={"message": e.detail},
+            )
+        except Exception as e:
+            print(e)
+            # Handle other unexpected exceptions
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Snap! Something went wrong, please try again!"},
+            )
+        
+# RAGChat route
+@app.post('/chat') 
+async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
+
+    # Deconstruct incoming query
+    user_id = query.user_id
+    user_input = filter_and_replace_crypto(query.user_input.strip())
+    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+
+    # Loading locale-appropriate system prompt
+    primer = system_prompts.get(locale, system_prompts["eng"])
+
+    # Create a conversation history for new users
+    convo_start = time.time()
+    USER_STATES.setdefault(user_id, {
+        'previous_queries': [],
+        'timestamp': convo_start
+    })
+
+    USER_STATES[user_id]['previous_queries'].append({'user': user_input})
+    previous_conversations = USER_STATES[user_id]['previous_queries'][-4:]
+
+    # Format previous conversations for RAG
+    formatted_history = ""
+    for conv in previous_conversations:
+        formatted_history += f"User: {conv.get('user', '')}\nAssistant: {conv.get('assistant', '')}\n"
+
+    # Construct the query string with complete chat history
+    chat_history = f"CHAT HISTORY: \n\n{formatted_history.strip()}"
+
+    # Apply nonsense filter
+    if not user_input or nonsense(user_input):
+        return handle_nonsense(locale)
+
+    else:
+        try:
+            # Set clock
+            timestamp = datetime.now().strftime("%B %d, %Y")
+
+            # Start RAG
+            response = await ragchat(primer, timestamp, user_id, chat_history, locale)     
+
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)
+
+            # Print for debugging
+            print(
+                
+                chat_history + "\n",
+                response + "\n\n"
+                  
+            )          
+                            
+            # Return response to user
+            return {'output': cleaned_response}
     
         except ValueError as e:
             print(e)
@@ -432,5 +761,5 @@ async def react_description(query: Query, request: Request, api_key: str = Depen
                 content={"message": "Snap! Something went wrong, please try again!"},
             )
 
+
 # Local start command: uvicorn app:app --reload --port 8800
-# Local start command: uvicorn appchat:app --reload --port 8800
