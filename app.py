@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import main
 from datetime import datetime
 from pinecone import Pinecone
@@ -33,6 +34,7 @@ class Query(BaseModel):
     user_input: str
     user_id: str
     user_locale: str | None = None
+    platform: str | None = None
 
 # Define FastAPI app
 app = FastAPI()
@@ -140,6 +142,28 @@ patterns = {
     'email': [email_pattern]
 }
 
+# Set up tooling 
+tools = [
+{
+    "type": "function",
+    "function": {
+    "name": "knowledge",
+    "description": "Technical Question API, this API makes a POST request to an external Knowledge Base with a technical question.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+        "query": {
+            "type": "string",
+            "description": "The user's technical question."
+        }
+        },
+        "required": ["query"],
+        "async": True,
+        "implementation": "async def knowledge(query):"
+    }
+    }
+}
+]
 
 ######## FUNCTIONS  ##########
 
@@ -165,23 +189,105 @@ def filter_and_replace_crypto(user_input):
             user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
     return user_input
 
-# Function to generate one expanded query
+# Funtion to clean bolding from Bot's response
+async def remove_double_asterisks(response):
+    return response.replace("**", "")
+
+# Function to investigate user issue
+INVESTIGATOR_PROMPT = """
+
+You are LedgerBot, an expert in cryptocurrency and helpful virtual assistant designed to support Ledger and technical queries through API integration. 
+                    
+When a user asks any question about Ledger products or anything related to Ledger's ecosystem, you will ALWAYS use your "Knowledge Base" tool to initiate an API call to an external service.
+
+Before utilizing your API retrieval tool, it's essential to first understand the user's issue. This requires asking follow-up questions. 
+    
+Here are key points to remember:
+
+1- Check the CHAT HISTORY to ensure the conversation doesn't exceed 4 exchanges between you and the user before calling your "Knowledge Base" API tool.
+2- ALWAYS ask if the user is getting an error message.
+3- NEVER request crypto addresses or transaction hashes/IDs.
+4- If the user mention their Ledger device, always clarify whether they're talking about the Nano S, Nano X or Nano S Plus.
+5- For issues related to a cryptocurrency, always inquire about the specific crypto coin or token involved and if the coin/token was transferred from an exchange. especially if the user hasn't mentioned it.
+6- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
+7- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
+8- For issues involving a swap, it's crucial to ask which swap service the user used (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+    
+After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your 'Knowledge Base' API tool. This approach helps maintain a smooth and effective conversation flow.
+
+ALWAYS summarize the issue as if you were the user, for example: "My issue is ..."
+
+If a user needs to contact Ledger Support, they can do so at https://support.ledger.com/
+
+NEVER use your API tool when a user simply thank you or greet you!
+
+Take a deep breath, I'll tip you $200 dollars if you do a good job!
+
+"""
+
+async def chat(chat):
+    # Define the initial messages with the system's instructions
+    messages = [
+        {"role": "system", "content":INVESTIGATOR_PROMPT},
+        {"role": "user", "content": chat}
+    ]
+    try:
+        # Call the API to get a response
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model='gpt-4-1106-preview',
+            #model='gpt-3.5-turbo-1106',
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            timeout= 30.0
+        )
+        
+    except Exception as e:
+                print(f"OpenAI completion failed: {e}")
+                async with httpx.AsyncClient() as client:
+                    try:       
+                        command_response = await client.post(
+                            "https://api.cohere.ai/v1/chat",
+                            json={
+
+                                "message": chat,
+                                "model": "command",
+                                "preamble_override": INVESTIGATOR_PROMPT,
+                                "temperature": 0.0,
+
+                            },
+                            headers={
+
+                                "Authorization": f"Bearer {cohere_key}"
+
+                            },
+                            timeout=30.0,
+
+                        )
+                        command_response.raise_for_status()
+                        rep = command_response.json()
+
+                        # Extract and return chat response
+                        res = rep['text']
+                        
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
+    return res
+
+# Function to expand the user's question:
 EXPANDER_PROMPT = """
 
-You are a helpful expert crypto research assistant working for Ledger, the crypto wallet company,
+You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
 
 Your role is to provide technical answers to queries from Ledger customers seeking assistance.
 
-For each query, give ONE brief answer based on your knowledge of cryptocurrency, Ledger devices and the Ledger Live app.
+Customers might reach out about a technical issue with the Ledger Live app on mobile or desktop, or an issue with their Ledger device (Nano S, Nano X or Nano S Plus) or an issue with an order from the Ledger store.
 
-VERY IMPORTANT:
+For each query, give one SHORT answer based on your knowledge of cryptocurrency, blockchain, Ledger devices and the Ledger Live app.
 
-- Solana tokens (USDC, UDTC, etc) are not supported in Ledger Live.
-- When users mention issues swapping, they often refer to issues swapping coins (BTC to ETH, ETH to SOL, etc) via the Changelly app within Ledger Live. It's best to refer them to the article titled 'I Didn’t Receive My Crypto After Swap.'
-- Ledger Live doesn't need an email and password, if you're asked for one, you're in the wrong part of the app that's only for Ledger Recover subscribers.
-- If you see the exact error "Something went wrong" when sending or receiving coins or tokens from an account, tell the user: "you have the wrong private keys in your Ledger device".
-
-Begin!
+Take a deep breath, I'll tip you $200 dollars if you do a good job!
 
 """
 
@@ -201,7 +307,6 @@ async def augment_query_generated(user_input):
 
         res = await openai_client.chat.completions.create(
             model="gpt-3.5-turbo-1106",
-            #model='gpt-4-1106-preview',
             temperature= 0.0,
             messages=messages,
             timeout=8.0,
@@ -213,11 +318,14 @@ async def augment_query_generated(user_input):
         no_output = ""
         return no_output
 
-    
+          
 # Retrieve and re-rank function
-async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
+async def retrieve(user_input, locale, joint_query):
     # Define context box
     contexts = []
+
+    if joint_query == '':
+        joint_query = user_input
 
     # Define a dictionary to map locales to URL segments
     locale_url_map = {
@@ -260,7 +368,7 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
             print(f"Embedding failed: {e}")
             return(e)
 
-        # Example Pinecone query replacement
+        # Query Pinecone
         try:
             try:
                 # Pull chunks from the serverless Pinecone instance
@@ -282,13 +390,13 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
                         "Content-Type": "application/json" 
 
                     },
-                    timeout=10,
+                    timeout=8,
                 )
-
                 pinecone_response.raise_for_status()
                 res_query = pinecone_response.json()
 
-            except httpx.HTTPStatusError:
+            except Exception as e:
+                print(e)
                 # Pull chunks from the legacy Pinecone fallback
                 print('Serverless response failed, falling back to legacy Pinecone')
                 try:
@@ -314,15 +422,16 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
                     )
 
                     pinecone_response.raise_for_status()
+                    print(pinecone_response)
                     res_query = pinecone_response.json()
                 except Exception as e:
                     print(f"Fallback Pinecone query failed: {e}")
                     return
   
             # Format docs from Pinecone response
-            learn_more_text = translations.get(locale, '\n\nLearn more at')
-            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"} 
-                for x in res_query["matches"]]
+            learn_more_text = ('\n\nLearn more at')
+            docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
+                    for x in res_query["matches"]]
         
         except Exception as e:
             print(f"Pinecone query failed: {e}")
@@ -339,7 +448,7 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
                 json={
 
                     "model": reranker_model,
-                    "query": query, 
+                    "query": user_input, 
                     "documents": docs, 
                     "top_n": 2,
                     "return_documents": True,
@@ -371,6 +480,15 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
                 context += context_url
                 contexts.append(context)
 
+    return contexts
+
+
+# Legacy RAG function
+async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform):
+
+    # Choose OpenAI model depending on where the query is coming from
+    llm = 'gpt-4-1106-preview' if platform in ["slack", "discord", "other"] else 'gpt-4'
+
     # Retrieve and format previous conversation history for a specific user_id
     previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
 
@@ -383,20 +501,15 @@ async def retrieve(query, joint_query, locale, user_id, timestamp, user_input):
     if locale == 'fr':
         augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
     elif locale == 'ru':
-        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Краткий ответ ассистента: " + "\n"
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Ассистента: " + "\n"
     else:
-        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant's short answer: " + "\n"
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant: " + "\n"
 
-    return augmented_query
-
-# RAG function
-async def rag(primer, augmented_query):
     try:
-        # Request OpenAI completion
+        
         res = await openai_client.chat.completions.create(
             temperature=0.0,
-            model='gpt-4',
-            #model='gpt-4-1106-preview',
+            model=llm,
             messages=[
 
                 {"role": "system", "content": primer},
@@ -406,42 +519,147 @@ async def rag(primer, augmented_query):
             timeout= 45.0
         )             
         reply = res.choices[0].message.content
+   
+    except Exception as e:
+        print(f"GPT4-turbo completion failed: {e}")
+        try:
+
+            res = await openai_client.chat.completions.create(
+                temperature=0.0,
+                model='gpt-4-1106-preview',
+                messages=[
+
+                    {"role": "system", "content": primer},
+                    {"role": "user", "content": augmented_query}
+
+                ],
+                timeout= 45.0
+            )             
+            reply = res.choices[0].message.content
+
+        except Exception as e:
+            print(f"GPT4 completion failed: {e}")
+
+            async with httpx.AsyncClient() as client:
+                try:       
+                    command_response = await client.post(
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": "command",
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=30.0,
+
+                    )
+                    command_response.raise_for_status()
+                    rep = command_response.json()
+
+                    # Extract and return chat response
+                    reply= rep['text']
+                
+
+                except Exception as e:
+                    print(f"Snap! Something went wrong, please try again!")
+                    return("Snap! Something went wrong, please try again!")
+
+    print(
+                
+                augmented_query + "\n",
+                reply + "\n\n"
+                  
+    )
+    return reply
+
+# RAG Chat Function
+async def ragchat(primer, timestamp, user_id, chat_history, locale):
+
+    res = await chat(chat_history)
+
+    # Check for tool_calls in the response
+    if res.choices[0].message.tool_calls is not None:
+        print("Calling API!")
+        tool_call_arguments = json.loads(res.choices[0].message.tool_calls[0].function.arguments)
+
+        # Extract query
+        function_call_query = tool_call_arguments["query"]
+
+        # Use this extracted query to call the retrieve function
+        retrieved_context = await retrieve(function_call_query, locale, joint_query='')
+        retrieved_context_string = retrieved_context[0]
+        if retrieved_context:
+            troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context_string + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
+            print(troubleshoot_instructions)
+            # Make a new completion call with the retrieved context
+            try:
+                # Request OpenAI completion            
+                res = await openai_client.chat.completions.create(
+                    temperature=0.0,
+                    #model='gpt-4',
+                    model='gpt-4-1106-preview',
+                    messages=[
+
+                        {"role": "system", "content": primer},
+                        {"role": "user", "content": troubleshoot_instructions}
+
+                    ],
+                    timeout= 45.0
+                )             
+                new_reply = res.choices[0].message.content
+        
+            except Exception as e:
+                print(f"OpenAI completion failed: {e}")
+                async with httpx.AsyncClient() as client:
+                    try:       
+                        command_response = await client.post(
+                            "https://api.cohere.ai/v1/chat",
+                            json={
+
+                                "message": troubleshoot_instructions,
+                                "model": "command",
+                                "preamble_override": primer,
+                                "temperature": 0.0,
+
+                            },
+                            headers={
+
+                                "Authorization": f"Bearer {cohere_key}"
+
+                            },
+                            timeout=30.0,
+
+                        )
+                        command_response.raise_for_status()
+                        rep = command_response.json()
+
+                        # Extract and return chat response
+                        new_reply = rep['text']
+                        
+                    except Exception as e:
+                        print(f"Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please try again!")
+  
+        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = new_reply
+
+        return new_reply
+    
+    # Extract reply content
+    elif res.choices[0].message.content is not None:
+        reply = res.choices[0].message.content
+        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = reply
+
         return reply
 
-    except Exception as e:
-        print(f"OpenAI completion failed: {e}")
-        async with httpx.AsyncClient() as client:
-            try:       
-                command_response = await client.post(
-                    "https://api.cohere.ai/v1/chat",
-                    json={
-
-                        "message": augmented_query,
-                        "model": "command",
-                        "preamble_override": primer,
-                        "temperature": 0.0,
-
-                    },
-                    headers={
-
-                        "Authorization": f"Bearer {cohere_key}"
-
-                    },
-                    timeout=30.0,
-
-                )
-                command_response.raise_for_status()
-                rep = command_response.json()
-
-                # Extract and return chat response
-                cohere_chat = rep['text']
-                return cohere_chat
 
 
-            except Exception as e:
-                print(f"Snap! Something went wrong, please try again!")
-                return("Snap! Something went wrong, please try again!")
-        
 ######## ROUTES ##########
 
 
@@ -458,6 +676,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+    platform = query.platform
 
     # Loading locale-appropriate system prompt
     primer = system_prompts.get(locale, system_prompts["eng"])
@@ -476,39 +695,32 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         try:
             # Set clock
             timestamp = datetime.now().strftime("%B %d, %Y")
- 
+
             # Prepare enriched user query
             hypothetical_answer = await augment_query_generated(user_input)
             joint_query = f"{user_input} {hypothetical_answer}"
-            print(joint_query)
 
             # Start date retrieval and reranking
-            augmented_query = await retrieve(user_input, joint_query, locale, user_id, timestamp, user_input)
+            contexts = await retrieve(user_input, locale, joint_query)
 
             # Start RAG
-            response = await rag(primer, augmented_query)            
+            response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform)
+
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)            
 
             # Save the response to a thread
             try:
                 USER_STATES[user_id] = {
-                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, response)],
+                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, cleaned_response)],
                     'timestamp': convo_start
                 }
 
             except Exception as e:
                 print("Saving thread failed!")
-             
-            # Print values for debugging
-            print(
-                
-                "\n\n" + "Query: " + joint_query + "\n\n",
-                augmented_query + "\n",
-                response + "\n\n"
-                  
-            )
-                            
+                                         
             # Return response to user
-            return {'output': response}
+            return {'output': cleaned_response}
     
         except ValueError as e:
             print(e)
@@ -528,5 +740,81 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"message": "Snap! Something went wrong, please try again!"},
             )
+        
+# RAGChat route
+@app.post('/chat') 
+async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
+
+    # Deconstruct incoming query
+    user_id = query.user_id
+    user_input = filter_and_replace_crypto(query.user_input.strip())
+    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+
+    # Loading locale-appropriate system prompt
+    primer = system_prompts.get(locale, system_prompts["eng"])
+
+    # Create a conversation history for new users
+    convo_start = time.time()
+    USER_STATES.setdefault(user_id, {
+        'previous_queries': [],
+        'timestamp': convo_start
+    })
+
+    USER_STATES[user_id]['previous_queries'].append({'user': user_input})
+    previous_conversations = USER_STATES[user_id]['previous_queries'][-4:]
+
+    # Format previous conversations for RAG
+    formatted_history = ""
+    for conv in previous_conversations:
+        formatted_history += f"User: {conv.get('user', '')}\nAssistant: {conv.get('assistant', '')}\n"
+
+    # Construct the query string with complete chat history
+    chat_history = f"CHAT HISTORY: \n\n{formatted_history.strip()}"
+
+    # Apply nonsense filter
+    if not user_input or nonsense(user_input):
+        return handle_nonsense(locale)
+
+    else:
+        try:
+            # Set clock
+            timestamp = datetime.now().strftime("%B %d, %Y")
+
+            # Start RAG
+            response = await ragchat(primer, timestamp, user_id, chat_history, locale)     
+
+            #Clean response
+            cleaned_response = await remove_double_asterisks(response)
+
+            # Print for debugging
+            print(
+                
+                chat_history + "\n",
+                response + "\n\n"
+                  
+            )          
+                            
+            # Return response to user
+            return {'output': cleaned_response}
+    
+        except ValueError as e:
+            print(e)
+            raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
+        
+        except HTTPException as e:
+            print(e)
+            # Handle known HTTP exceptions
+            return JSONResponse(
+                status_code=e.status_code,
+                content={"message": e.detail},
+            )
+        except Exception as e:
+            print(e)
+            # Handle other unexpected exceptions
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Snap! Something went wrong, please try again!"},
+            )
+
 
 # Local start command: uvicorn app:app --reload --port 8800
