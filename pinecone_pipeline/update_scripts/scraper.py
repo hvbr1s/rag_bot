@@ -1,10 +1,15 @@
 import os
-import datetime
+import sys
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import shutil
-from datetime import date
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load blacklist
+from blacklist.blacklist_module import blacklist
+blacklist = blacklist
 
 load_dotenv()
 ZD_USER = os.getenv("ZD_USER")
@@ -107,8 +112,7 @@ def scrape_urls(output_folder, url_txt_file_path):
         article_urls = [line.strip() for line in file]
 
     for url in article_urls:
-        if url.startswith('https://www.ledger.com/academy/tutorials/') or url.startswith('#') or url.startswith('https://www.ledger.com/academy/school-of-block/'):
-        #if url.startswith('https://www.ledger.com/fr/academy/tutorials/') or url.startswith('#') or url.startswith('https://www.ledger.com/fr/academy/school-of-block/') or url.startswith('https://www.ledger.com/fr/academy/mediatheque/page/') :    
+        if url.startswith('https://www.ledger.com/academy/tutorials/') or url.startswith('#') or url.startswith('https://www.ledger.com/academy/school-of-block/'):   
             # Cut out all of the academy tutorials, and also any lines in the file that begin with #
             # This will allow someone to add a comment to this file
             # or comment out particular articles that are problematic if necessary
@@ -135,7 +139,6 @@ def run_scraper(output_directory_path: str = None, url_txt_file_path: str = None
         output_directory_path = os.path.join(pinecone_pipeline_root_directory, 'output_files')
     if not url_txt_file_path:
         url_txt_file_path = os.path.join(output_directory_path, '..', 'url.txt') # Use this to download the ENG Academy
-        #url_txt_file_path = "/home/danledger/knowledge_bot/pinecone_pipeline/url_fr.txt" # Use this to download the FR Academy
     if not other_articles_directory_path:
         other_articles_directory_path = os.path.join(output_directory_path, '..', 'other_articles')
     scraper_output_folder = os.path.join(output_directory_path, 'articles')
@@ -148,44 +151,14 @@ def run_scraper(output_directory_path: str = None, url_txt_file_path: str = None
         # If we're only scraping specific articles, then we only need to run the Zendesk part of the scraper
         scrape_zendesk(scraper_output_folder, article_ids_to_skip=[], scrape_these_article_ids=scrape_these_article_ids, locales=locales)
     else:
-        scrape_zendesk(scraper_output_folder, article_ids_to_skip=[
-            360015559320,   # (ENG/FR/SPA/GER) E-COMMERCE AND MARKETING DATA BREACH - FAQ
-            9731871986077,  # HOW TO EXPORT YOUR SAMSUNG MX1 GENESIS/ART NFT TO METAMASK AND SECURE IT WITH A LEDGER WALLET
-            9746372672925,  # LEDGER EXTENSION CHECKER: HOW TO INTERPRET WARNING MESSAGES
-            360000105374,   # LEDGER BLUE MANUAL
-            360006284494,   # TROUBLESHOOT LEDGER BLUE FIRMWARE UPDATE
-            7410961987869,  # ARTIST'S GUIDE TO MIGRATING TO LEDGER
-            360033473414,   # OLED SCREEN VULNERABILITY - FAQ
-            4404388633489,  # EXPORT YOUR ACCOUNTS
-            360015738179,   # DERIVATION PATH VULNERABILITY IN BITCOIN DERIVATIVES
-            360034576433,   # BLUETOOTH PROTOCOL VULNERABILITY
-            12833652732573, # CONNECT YOUR LEDGER TO BASE (BASE) NETWORK VIA METAMASK
-            5692126348957,  # MY CARDANO (ADA) BALANCE DISPLAYS 0
-            5705495569949,  # FTX SWAPS TEMPORARILY PAUSED IN LEDGER LIVE
-            360021144618,   # WYRE BUY SERVICE TEMPORARILY PAUSED IN LEDGER LIVE
-            4404422869265,  # WYRE SWAPS TEMPORARILY PAUSED IN LEDGER LIVE
-            10126075005981, # CONNECT YOUR LEDGER TO COREUM MAINNET
-            6563476062621,  # ETHEREUM MERGE LIVE THREAD
-            9982370871069,  # WHAT IS THE ETHEREUM SHANGHAI UPGRADE AND HOW WILL IT AFFECT LEDGER LIVE USERS
-            4405497803153,  # MCU FIRMWARE IS NOT GENUINE
-            115005456969,   # BITCOIN GOLD
-            4405497803153,  # MCU FIRMWARE IS NOT GENUINE
-            4405495141393,  # MCU FIRMWARE IS OUTDATED
-            9093172893597,  # VALENTINE DAY
-            115005199449,   # SET UP MYCELIUM ON ANDROID
-            4413120085393,  # WHY IS THERE A STICKER ON THE BACK OF THE BOX?
-            4413120085393,  # WHY IS THERE A STICKER ON THE BACK OF THE BOX?
-            360012650219,   # DOES COVID-19 IMPACT SHIPPING?
-            13692339908893, # HOW TO STAKE ETH THROUGH LEDGER LIVE [ AND CHOOSE THE OPTION THAT WORKS BEST FOR YOU]
-            15090727186077, # TEMPORARY ISSUE WITH BITCOIN (BTC)
-            14593285242525, # SOLVING THE "TXN-MEMPOOL-CONFLICT" ERROR WHEN SENDING BTC
-            4404130736401,  # TRON SYNCHRONIZATION ISSUE WITH LEDGER LIVE 2.30.0
-            5209482601245,  # LEDGER EXTENSION FAQ
-            9728485635741,  # HOW TO SET UP LEDGER EXTENSION
+        # scrape_zendesk(
+
+        #     scraper_output_folder, 
+        #     article_ids_to_skip=blacklist,
+        #     locales = locales
             
-            ],
-            locales = locales)
-        #scrape_urls(scraper_output_folder, url_txt_file_path)
+        # )
+        # scrape_urls(scraper_output_folder, url_txt_file_path)
         scrape_other_articles(scraper_output_folder, other_articles_directory_path)
 
 if __name__ == "__main__":

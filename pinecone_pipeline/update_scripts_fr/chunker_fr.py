@@ -128,7 +128,7 @@ def count_chars_in_json(file_name):
     return char_counts
 
 
-def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_overlap: int = 20, minimum_chunk_size: int = 5):
+def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_overlap: int = 50, minimum_chunk_size: int = 5):
     # Initialize the loader and load documents
     if not output_directory_path:
         pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
@@ -136,8 +136,6 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_
     scraped_articles_folder = os.path.join(output_directory_path, 'articles')
     output_json_file_path = os.path.join(output_directory_path, 'output.json')
     chunk_list = [] # list of chunks to be written to the json file
-    #docs = load_files(scraped_articles_folder)  
-    #print(len(docs))
 
     # Initialize the text splitter
     text_splitter = TextChunker(
@@ -187,4 +185,4 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_
     return output_json_file_path
 
 if __name__ == "__main__":
-    run_chunker(chunk_size=500)
+    run_chunker()

@@ -1,4 +1,7 @@
-from update_scripts import  scraper, chunker, index_booter, updater
+from update_scripts import  scraper, chunker, updater_cohere
+from update_scripts_fr import  updater_cohere_fr
+from update_scripts_ru import  updater_cohere_ru
+from blacklist import blacklist_module
 from os import path
 import shutil
 
@@ -14,16 +17,24 @@ if __name__ == "__main__":
                         # If you want to scrape specific Zendesk article IDs, put them in this list.
                         # Otherwise, leave it empty and it will scrape everything.
                         scrape_these_article_ids=[
-                            4402543134993,
+
+                            6433745248029,
+                            
                         ]
-                        )
+    )
     output_json_path = chunker.run_chunker(
         output_directory,
-        chunk_size=500
+        chunk_size=512
         )
     # We likely don't need to reboot the index anymore, but I'm leaving this here just in case
     #index_booter.reboot_index('prod')
-    updater.run_updater(output_json_path, 'prod')
+
+    # Update ENG database
+    updater_cohere.run_updater(output_json_path)
+    # Update FR database
+    updater_cohere_fr.run_updater(output_json_path)
+    # Update RU database
+    updater_cohere_ru.run_updater(output_json_path)
 
     # Delete the output_files directory
     if path.exists(output_directory):

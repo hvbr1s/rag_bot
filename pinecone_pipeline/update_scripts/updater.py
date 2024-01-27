@@ -13,7 +13,6 @@ from openai.error import RateLimitError
 
 load_dotenv()
 
-
 def read_json_file(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         json_data = json.load(f)
@@ -21,6 +20,8 @@ def read_json_file(file_path):
 
 def run_updater(json_file_path:str = None, index_name = 'prod'):
     failed_chunks = 0  # Initialize counter for failed chunks
+    pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
+    output_folder = os.path.join(pinecone_pipeline_root_directory, 'output_files')
     if not json_file_path:
         pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
         output_folder = os.path.join(pinecone_pipeline_root_directory, 'output_files')
@@ -71,12 +72,12 @@ def run_updater(json_file_path:str = None, index_name = 'prod'):
     index_stats_response = index.describe_index_stats()
     print(index_stats_response)
 
-    # # Delete the output_files directory
-    # if path.exists(output_folder):
-    #     shutil.rmtree(output_folder)
-    #     print(f"Deleted the folder: {output_folder}")
-    # else:
-    #     print(f"The folder {output_folder} does not exist.")
+    # Delete the output_files directory
+    if path.exists(output_folder):
+        shutil.rmtree(output_folder)
+        print(f"Deleted the folder: {output_folder}")
+    else:
+        print(f"The folder {output_folder} does not exist.")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
 from collections import Counter
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_openai.embeddings import OpenAIEmbeddings
 import tiktoken
 
 ################### HC CHUNKER ######################
@@ -13,6 +15,12 @@ class Document:
     def __init__(self, page_content, metadata):
         self.page_content = page_content
         self.metadata = metadata
+        
+    def to_dict(self):
+        return {
+            'page_content': self.page_content,
+            'metadata': self.metadata
+        }
 
 def load_html_file(file_path):
     file_name = Path(file_path).name
@@ -53,52 +61,7 @@ def load_files(directory_path):
         docs.append(doc)
     return docs
 
-class TextChunker:
-    def __init__(self, chunk_size, chunk_overlap, length_function, separators, minimum_chunk_size=5):
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.length_function = length_function
-        self.separators = separators
-        self.minimum_chunk_size = minimum_chunk_size
-
-    def split_text(self, text: str):
-        if self.length_function(text) <= self.chunk_size:
-            return [text]
-
-        for sep in self.separators:
-            chunks = text.split(sep)
-            if len(chunks) > 1:
-                break
-
-        if len(chunks) == 1:
-            return [text]
-
-        chunks_with_overlap = []
-        current_chunk = ""
-        for chunk in chunks:
-            if self.length_function(f'{current_chunk} {chunk}') <= self.chunk_size:
-                current_chunk = f'{current_chunk} {chunk}'
-            else:
-                if current_chunk:
-                    chunks_with_overlap.append(current_chunk)
-                current_chunk = chunk
-
-        if current_chunk:
-            chunks_with_overlap.append(current_chunk)
-
-        # Create overlapping chunks
-        overlapping_chunks = []
-        for i in range(len(chunks_with_overlap)):
-            current_chunk = chunks_with_overlap[i]
-            if i < len(chunks_with_overlap) - 1:
-                next_chunk = chunks_with_overlap[i + 1]
-                overlap_start = max(len(current_chunk) - self.chunk_overlap, 0)
-                current_chunk = f'{current_chunk} {next_chunk[:overlap_start]}'
-            if len(current_chunk.split()) >= self.minimum_chunk_size:
-                # only append the chunk if it has at least the minimum number of words to be considered relevant
-                overlapping_chunks.append(current_chunk)
-
-        return overlapping_chunks
+text_splitter = SemanticChunker(OpenAIEmbeddings())
 
 # Define the length function
 def tiktoken_len(text):
@@ -128,7 +91,7 @@ def count_chars_in_json(file_name):
     return char_counts
 
 
-def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_overlap: int = 50, minimum_chunk_size: int = 5):
+def run_chunker(output_directory_path: str = None, chunk_size: int = 500, chunk_overlap: int = 20, minimum_chunk_size: int = 5):
     # Initialize the loader and load documents
     if not output_directory_path:
         pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
@@ -137,20 +100,17 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
     output_json_file_path = os.path.join(output_directory_path, 'output.json')
     chunk_list = [] # list of chunks to be written to the json file
 
-    # Initialize the text splitter
-    text_splitter = TextChunker(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=tiktoken_len,
-        separators=['\n\n', '\n', '| |', ' ', ''],
-        minimum_chunk_size=minimum_chunk_size
-    )
-
     # Process each document
     with open(output_json_file_path, 'w+', encoding='utf-8') as f:
         for file_name in tqdm(os.listdir(scraped_articles_folder)):
             file_path = os.path.join(scraped_articles_folder, file_name)
             doc = load_html_file(file_path)
+            
+            # Check if the document content is empty or invalid
+            if not doc.page_content.strip():
+                print(f"Skipping empty or invalid content in file: {file_name}")
+                continue
+            
             if 'source' in doc.metadata:
                 url = doc.metadata['source']
                 # Initialize the MD5 hash object
@@ -160,20 +120,25 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
                 url = None
                 uid = "unknown"
 
-            chunks = text_splitter.split_text(doc.page_content)
+            try:
+                chunks = text_splitter.create_documents([doc.page_content])
 
-            # Create an entry for each chunk
-            # Include all metadata, plus the chunk text and the generated chunk ID
-            for i, chunk in enumerate(chunks):
-                entry = {}
-                entry.update(doc.metadata)
-                entry.update({
-                    'id': f'{uid}-{i}',
-                    'chunk-uid': uid,
-                    'chunk-page-index': i,
-                    'text': chunk.strip()
-                    })
-                chunk_list.append(entry)
+                for i, chunk in enumerate(chunks):
+                    chunk_text = chunk.page_content  # Extract text from the Document object
+                    entry = {
+                        'source': doc.metadata.get('source', ''),
+                        'source-type': doc.metadata.get('source-type', ''),
+                        'locale': doc.metadata.get('locale', ''),
+                        'id': f'{uid}-{i}',
+                        'chunk-uid': uid,
+                        'chunk-page-index': i,
+                        'text': chunk_text 
+                        }
+                    chunk_list.append(entry)
+            except IndexError as e:
+                print(f"Error processing file {file_name}: {e}")
+                continue
+            
         json.dump(chunk_list, f, ensure_ascii=False) # write the list of chunks to the json file
 
     # Character count
@@ -185,4 +150,4 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
     return output_json_file_path
 
 if __name__ == "__main__":
-    run_chunker()
+    run_chunker(chunk_size=512)

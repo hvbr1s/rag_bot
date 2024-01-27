@@ -3,8 +3,11 @@ import json
 import os
 from os import path
 from dotenv import load_dotenv
+import openai
 from tqdm.auto import tqdm
+import pinecone
 from pinecone import Pinecone
+from pinecone.grpc import PineconeGRPC
 import cohere
 
 load_dotenv()
@@ -47,22 +50,23 @@ def run_updater(json_file_path:str = None):
         try:
             res = co.embed(
                 texts=texts,
-                model='embed-english-v3.0',
+                model='embed-multilingual-v3.0',
                 input_type='search_document'
                 )
         except Exception:
             time.sleep(240)
             res = co.embed(
-                texts=texts,
-                model='embed-english-v3.0',
+                texts=[texts],
+                model='embed-multilingual-v3.0',
                 input_type='search_document'
                 )
+
 
         embeds = res.embeddings
         to_upsert = [{'id': meta['id'], 'values': embed, 'metadata': meta} for meta, embed in zip(meta_batch, embeds)]
 
         try:
-            index.upsert(vectors=to_upsert, namespace='eng') # use to update the ENG database
+            index.upsert(vectors=to_upsert, namespace='fr') # use to update the FR database
         except Exception as e:
             print(f"Failed to upsert the following data: {to_upsert}")
             print(f"Error: {e}")

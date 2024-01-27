@@ -68,13 +68,11 @@ https://www.ledger.com/academy/glossary/relay-chain
 https://www.ledger.com/academy/osmosis-dex-explained
 https://www.ledger.com/academy/defi-beginners-guide
 https://www.ledger.com/academy/what-is-taproot
-https://www.ledger.com/academy/tutorials/migrating-your-coins-from-poloniex
 https://www.ledger.com/academy/glossary/transactions-per-second-tps
 https://www.ledger.com/academy/your-guide-to-the-metaverse
 https://www.ledger.com/academy/topics/scams/crypto-hacks
 https://www.ledger.com/academy/nft-marketplaces-explained
 https://www.ledger.com/academy/enter-the-trust-zone/losing-your-ledger
-https://www.ledger.com/academy/what-is-lido
 https://www.ledger.com/academy/glossary/node
 https://www.ledger.com/academy/glossary/seed-phrase
 https://www.ledger.com/academy/glossary/central-bank-digital-currency-cbdc
@@ -89,7 +87,6 @@ https://www.ledger.com/academy/token-burning-what-is-it-why-do-it
 https://www.ledger.com/academy/glossary/paper-trading
 https://www.ledger.com/academy/proof-of-cryptos-biggest-contribution
 https://www.ledger.com/academy/just-hodl-and-grow
-https://www.ledger.com/academy/ledger-nano-the-safest-way-to-manage-crypto
 https://www.ledger.com/academy/hack-5-malicious-wallet
 https://www.ledger.com/academy/what-is-filecoin
 https://www.ledger.com/academy/series/enter-the-donjon/episode-5-software-attacks
@@ -109,7 +106,6 @@ https://www.ledger.com/academy/glossary/qr-code-crypto
 https://www.ledger.com/academy/how-many-cryptos-are-there
 https://www.ledger.com/academy/what-is-algorand
 https://www.ledger.com/academy/crypto-cards-how-they-work-why-you-need-one
-https://www.ledger.com/academy/tutorials/nano-s-reset-a-device
 https://www.ledger.com/academy/blockchain/what-is-a-dao
 https://www.ledger.com/academy/when-you-dont-have-financial-freedom
 https://www.ledger.com/academy/save-and-grow-your-crypto-with-ledger
@@ -134,7 +130,6 @@ https://www.ledger.com/academy/what-is-web-30-everything-you-need-to-know
 https://www.ledger.com/academy/glossary/gas
 https://www.ledger.com/academy/series/ledger-how-tos/how-to-migrate-your-crypto-from-one-ledger-to-another
 https://www.ledger.com/academy/what-is-polkadot
-https://www.ledger.com/academy/tutorials/migrating-your-coins-from-kraken
 https://www.ledger.com/academy/school-of-block/blind-signing-the-crypto-attack-vector-you-must-be-aware-of
 https://www.ledger.com/academy/blockchain/the-race-to-web-3-ethereum-vs-cardano-vs-polkadot
 https://www.ledger.com/academy/whats-an-automated-market-maker
@@ -155,14 +150,11 @@ https://www.ledger.com/academy/hardwarewallet/best-practices-when-using-a-hardwa
 https://www.ledger.com/academy/glossary/strongshardingstrong
 https://www.ledger.com/academy/enter-the-trust-zone/all-about-scams
 https://www.ledger.com/academy/basic-basics/web3-security-essentials/web3-scams-explained
-https://www.ledger.com/academy/how-to-make-sure-that-my-crypto-stays-safe-with-ledger
 https://www.ledger.com/academy/hardwarewallet/ledger-and-third-party-wallets
 https://www.ledger.com/academy/crypto-proof-of-reserves-audit
 https://www.ledger.com/academy/what-is-a-flash-loan
 https://www.ledger.com/academy/crypto/hodl-explained
-https://www.ledger.com/academy/topics/crypto/what-is-avalanche-avax
 https://www.ledger.com/academy/what-is-zerion
-https://www.ledger.com/academy/crypto/what-is-ethereum-2-0
 https://www.ledger.com/academy/basic-basics/ledgers-bit-of-it/discover-ledger-ecosystem
 https://www.ledger.com/academy/blockchain/what-is-the-lightning-network
 https://www.ledger.com/academy/glossary/derivatives
@@ -177,7 +169,6 @@ https://www.ledger.com/academy/why-two-factor-authentication-2fa-matters-now-mor
 https://www.ledger.com/academy/cosmos-the-future-of-blockchain-interoperability
 https://www.ledger.com/academy/ledger-validator-node-has-arrived
 https://www.ledger.com/academy/crypto-debit-card-or-crypto-credit-card-whats-the-difference
-https://www.ledger.com/academy/tutorials/nano-s-the-recovery-check-app
 https://www.ledger.com/academy/topics/metaverse/what-is-the-otherside-metaverse
 https://www.ledger.com/academy/crypto/what-is-libra
 https://www.ledger.com/academy/glossary/private-key
@@ -213,7 +204,6 @@ https://www.ledger.com/academy/how-to-hack-a-hardware-wallet
 https://www.ledger.com/academy/school-of-block/episode-9-financial-freedom-what-is-web-3
 https://www.ledger.com/academy/crypto/defi-taking-finance-from-wall-street-to-main-street
 https://www.ledger.com/academy/what-is-ledger-recover
-https://www.ledger.com/academy/tutorials/ledger-live-how-to-swap-with-paraswap
 https://www.ledger.com/academy/blockchain/what-are-public-keys-and-private-keys?
 https://www.ledger.com/academy/glossary/what-are-erc-20-tokens
 https://www.ledger.com/academy/what-it-means-to-be-your-own-bank
@@ -268,7 +258,6 @@ https://www.ledger.com/academy/how-to-trade-crypto
 https://www.ledger.com/academy/what-is-ipfs
 https://www.ledger.com/academy/glossary/decentralized-finance
 https://www.ledger.com/academy/glossary/51-attack
-https://www.ledger.com/academy/tutorials/nano-s-install-uninstall-apps
 https://www.ledger.com/academy/blockchain/digital-jobs-working-in-the-metaverse
 https://www.ledger.com/academy/ledgers-staking-glossary
 https://www.ledger.com/academy/swap-glossary-how-to-start-swapping-with-confidence
@@ -304,7 +293,6 @@ https://www.ledger.com/academy/ethereum-proof-of-stake-pos-explained
 https://www.ledger.com/academy/glossary/oracle-crypto
 https://www.ledger.com/academy/whats-a-wallet-confirmation-signature
 https://www.ledger.com/academy/what-is-elrond
-https://www.ledger.com/academy/series/ledger-how-tos/how-to-set-up-your-nano-s-plus
 https://www.ledger.com/academy/glossary/impermanent-loss
 https://www.ledger.com/academy/what-is-infura
 https://www.ledger.com/academy/basic-basics/owning-and-using-it/how-to-choose-your-hardware-wallet
@@ -394,7 +382,6 @@ https://www.ledger.com/academy/10-tips-for-the-crypto-bear-market
 https://www.ledger.com/academy/glossary/zero-knowledge-proof
 https://www.ledger.com/academy/smart-contract-functions-essential-red-flags-to-know-about
 https://www.ledger.com/academy/crypto/understanding-technical-and-fundamental-analysis
-https://www.ledger.com/academy/how-to-set-up-your-nano-x
 https://www.ledger.com/academy/school-of-block/episode-20-in-the-head-of-a-scammer
 https://www.ledger.com/academy/what-is-bitcoin
 https://www.ledger.com/academy/what-are-erc-tokens-and-why-do-we-use-them
@@ -410,13 +397,11 @@ https://www.ledger.com/academy/what-is-a-fork
 https://www.ledger.com/academy/what-is-cardano
 https://www.ledger.com/academy/glossary/fiat
 https://blog.ledger.com/should-crypto-fear-quantum-computing
-https://blog.ledger.com/Ledger-Recover-White-Paper
 https://www.ledger.com/a-closer-look-into-ledger-security-the-root-of-trust
 https://www.ledger.com/blog/ledger-announces-ledger-enterprise-tradelink
 https://www.ledger.com/academy/topics/crypto/what-is-spot-trading-in-crypto
 https://www.ledger.com/academy/topics/defi/what-is-liquid-staking
 https://www.ledger.com/academy/what-is-sui
-https://www.ledger.com/academy/crypto/what-is-ripple
 https://www.ledger.com/academy/what-are-memecoins
 https://www.ledger.com/blog/part-1-genesis-of-ledger-recover-self-custody-without-compromise
 https://www.ledger.com/blog/part-2-genesis-of-ledger-recover-securely-distributing-the-shares
@@ -429,5 +414,6 @@ https://support.polkadot.network/support/solutions/articles/65000169209-what-doe
 https://support.polkadot.network/support/solutions/articles/65000150130-how-do-i-know-which-validators-to-choose-
 https://www.ledger.com/academy/topics/defi/what-is-liquid-staking
 https://www.ledger.com/academy/what-is-slippage-in-crypto
-https://www.ledger.com/academy/solana-staking-how-to-stake-sol
 https://www.ledger.com/academy/topics/security/what-is-a-software-wallet
+https://www.ledger.com/academy/bitcoin-smart-contracts-and-apps-do-they-even-exist
+https://www.ledger.com/academy/topics/economics-and-regulation/bitcoin-spot-futures-etf

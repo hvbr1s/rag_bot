@@ -158,4 +158,4 @@ def run_scraper(output_directory_path: str = None, url_txt_file_path: str = None
         scrape_other_articles(scraper_output_folder, other_articles_directory_path)
 
 if __name__ == "__main__":
-    run_scraper(locales=['fr-fr'])
+    run_scraper(locales=['ru'])

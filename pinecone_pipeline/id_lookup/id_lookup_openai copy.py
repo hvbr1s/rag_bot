@@ -1,12 +1,12 @@
 import os
-import json
 from openai import OpenAI
+
+client = OpenAI(api_key=openai_api_key)
 import pinecone
 from dotenv import load_dotenv
 
 # Load environment variables from a .env file
 load_dotenv()
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 def init_pinecone():
     """
@@ -38,7 +38,6 @@ def get_embedding(link, embed_model="text-embedding-ada-002"):
         raise EnvironmentError("OpenAI API key not set")
 
     # Set OpenAI API key
-    
     # Create embedding for the given link using the specified embedding model
     res_embed = client.embeddings.create(input=[link], engine=embed_model)
     # Return the embedding data from the response
@@ -64,7 +63,7 @@ def main():
     index = init_pinecone()
 
     # Set the article title or a bit of text from the article you're looking for
-    title = "LEDGER EXTENSION FAQ"
+    title = "HOW TO CONNECT TO DAPPS WITH LEDGER EXTENSION"
     # Get the embedding for the article link
     xq = get_embedding(title)
     # Query Pinecone to get the article ID and title using the embedding
