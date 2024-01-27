@@ -11,7 +11,6 @@ from langchain_openai.embeddings import OpenAIEmbeddings
 import tiktoken
 
 
-embed_model ='text-embedding-3-large'
 
 ################### HC CHUNKER ######################
 class Document:
@@ -67,7 +66,7 @@ def load_files(directory_path):
 text_splitter = SemanticChunker(
     OpenAIEmbeddings(
 
-        model= embed_model,
+        model= 'text-embedding-3-large',
         chunk_size= 512,
 
     )

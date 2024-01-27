@@ -338,33 +338,7 @@ async def retrieve(user_input, locale, joint_query):
     url_segment = locale_url_map.get(locale, "/en-us/")
 
         # Prepare Cohere embeddings
-    try:
-            # Choose Cohere embeddings model based on locale
-            # embedding_model = 'embed-multilingual-v3.0' if locale in ['fr', 'ru'] else 'embed-english-v3.0'
-            
-            # # Call the embedding function
-            # embed_response = await client.post(
-            #     "https://api.cohere.ai/v1/embed",
-            #     json={
-
-            #         "texts": [joint_query], 
-            #         "model": embedding_model, 
-            #         "input_type": "search_query",
-
-            #     },
-            #     headers={
-
-            #         "Authorization": f"Bearer {cohere_key}"
-            #     },
-            #     timeout=20,
-            # )
-
-            # embed_response.raise_for_status()
-            # res_embed = embed_response.json()
-            # xq = res_embed['embeddings']
-
-            embedding_model = "text-embedding-3-large"
-            
+    try:            
             # Call the embedding function
             res = await openai_client.embeddings.create(
                 input=joint_query, 
@@ -437,39 +411,6 @@ async def retrieve(user_input, locale, joint_query):
                 except Exception as e:
                     print(f"Fallback Pinecone query failed: {e}")
                     return
-
-            # top_chunks = res_query["matches"][:2]
-
-            # docs = []
-
-            # for chunk in top_chunks:
-            #     chunk_uid = chunk["metadata"]["chunk-uid"]
-
-            #     # Query Pinecone with the chunk-uid to get all related pages
-            #     pinecone_response = await client.post(
-            #         "https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
-            #         json={
-            #             "vector": chunk_uid,  # You may need to adjust this based on how your Pinecone model interprets chunk-uids
-            #             "topK": 10,  # Adjust the number of results as needed
-            #             "namespace": locale,
-            #             "includeValues": True,
-            #             "includeMetadata": True
-            #         },
-            #         headers={
-            #             "Api-Key": pinecone_key,
-            #             "Accept": "application/json",
-            #             "Content-Type": "application/json" 
-            #         },
-            #         timeout=8,
-            #     )
-            #     pinecone_response.raise_for_status()
-            #     chunk_query_response = pinecone_response.json()
-
-            #     # Extract and organize data from the response
-            #     for page in chunk_query_response["matches"]:
-            #         docs.append({
-            #             "text": f"{page['metadata']['text']}\n\nLearn more at: {page['metadata'].get('source', 'N/A')}"
-            #         })
   
             # Format docs from Pinecone response
             learn_more_text = ('\n\nLearn more at')
@@ -520,7 +461,7 @@ async def retrieve(user_input, locale, joint_query):
             print(f"Reranking failed: {e}")
             # Fallback to simpler retrieval without Cohere if reranking fails
             res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
-            sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.50], key=lambda x: x['score'], reverse=True)
+            sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.70], key=lambda x: x['score'], reverse=True)
 
             for idx, item in enumerate(sorted_items):
                 context = item['metadata']['text']
@@ -532,7 +473,7 @@ async def retrieve(user_input, locale, joint_query):
 
 
 # Legacy RAG function
-async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform):
+async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query):
 
     # Choose OpenAI model depending on where the query is coming from
     llm = 'gpt-4-1106-preview' if platform in ["slack", "discord", "other"] else 'gpt-4-1106-preview'
@@ -620,7 +561,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
                     return("Snap! Something went wrong, please try again!")
 
     print(
-                
+                joint_query + "\n",
                 augmented_query + "\n",
                 reply + "\n\n"
                   
@@ -752,7 +693,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             contexts = await retrieve(user_input, locale, joint_query)
 
             # Start RAG
-            response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform)
+            response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query)
 
             #Clean response
             cleaned_response = await remove_double_asterisks(response)            

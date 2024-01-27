@@ -1,6 +1,4 @@
-from update_scripts import  scraper, chunker, updater_cohere
-from update_scripts_fr import  updater_cohere_fr
-from update_scripts_ru import  updater_cohere_ru
+from update_scripts import  scraper, semantic_chunker, semantic_updater
 from blacklist import blacklist_module
 from os import path
 import shutil
@@ -22,19 +20,15 @@ if __name__ == "__main__":
 
                         ]
                         )
-    output_json_path = chunker.run_chunker(
+    output_json_path = semantic_chunker.run_chunker(
         output_directory,
         chunk_size=512
         )
     # We likely don't need to reboot the index anymore, but I'm leaving this here just in case
     #index_booter.reboot_index('prod')
 
-    # Update ENG database
-    updater_cohere.run_updater(output_json_path)
-    # Update FR database
-    updater_cohere_fr.run_updater(output_json_path)
-    # Update RU database
-    updater_cohere_ru.run_updater(output_json_path)
+    # Update Pinecone database
+    semantic_updater.run_updater(output_json_path)
 
     # Delete the output_files directory
     if path.exists(output_directory):

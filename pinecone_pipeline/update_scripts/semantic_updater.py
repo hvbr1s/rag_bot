@@ -5,9 +5,7 @@ from os import path
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 from pinecone import Pinecone
-import cohere
 from openai import OpenAI
-# from openai.types import RateLimitError
 
 
 load_dotenv()
@@ -22,10 +20,6 @@ index = pc.Index(
         index_name,
         host=pc_host
     )
-
-# # Initialize Cohere client
-# os.environ["COHERE_API_KEY"] = os.getenv("COHERE_API_KEY") 
-# co = cohere.Client(os.environ["COHERE_API_KEY"])
 
 # Initialize OpenAI client
 client = OpenAI()
@@ -60,38 +54,21 @@ def run_updater(json_file_path:str = None):
             )
             embeds.extend([r.embedding for r in res.data])
 
-    # for i in tqdm(range(0, len(documents), batch_size)):
-    #     i_end = min(len(documents), i+batch_size)  # find end of batch
-    #     meta_batch = documents[i:i_end]
-    #     texts = [x['text'] for x in meta_batch]
-    #     chunky = texts[0]
-
-        # Cohere embedding        
-        # try:
-        #     res = co.embed(
-        #         texts=texts,
-        #         model='embed-english-v3.0',
-        #         input_type='search_document'
-        #         )
-        # except Exception:
-        #     time.sleep(240)
-        #     res = co.embed(
-        #         texts=texts,
-        #         model='embed-english-v3.0',
-        #         input_type='search_document'
-        #         )
-        # embeds = res.embeddings
-
-        # except :
-        #     time.sleep(240)
-        #     res = client.embeddings.create(
-        #         input=texts, 
-        #         model=oai_model
-        #     )
         # Upsert embeddings tp DB
         to_upsert = [{'id': meta['id'], 'values': embed, 'metadata': meta} for meta, embed in zip(meta_batch, embeds)]
         try:
-            index.upsert(vectors=to_upsert, namespace='eng') # use to update the ENG database
+            try: 
+                index.upsert(
+                    vectors=to_upsert, 
+                    namespace='eng'
+                ) 
+            except:
+                time.sleep(120)
+                index.upsert(
+                    vectors=to_upsert, 
+                    namespace='eng'
+                ) 
+ 
         except Exception as e:
             print(f"Failed to upsert the following data: {to_upsert}")
             print(f"Error: {e}")
