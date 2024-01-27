@@ -16,3 +16,5 @@ apscheduler
 cohere==4.44
 asyncio
 langchain
+langchain_experimental 
+langchain_openai
