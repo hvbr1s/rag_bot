@@ -41,13 +41,13 @@ app = FastAPI()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-index_name = 'serverless-test'
-pc_host ="https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io"
-pc = Pinecone(api_key=pinecone_key)
-index = pc.Index(
-        index_name,
-        host=pc_host
-    )
+# index_name = 'serverless-test'
+# pc_host ="https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io"
+# pc = Pinecone(api_key=pinecone_key)
+# index = pc.Index(
+#         index_name,
+#         host=pc_host
+#     )
 
 # Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
@@ -207,11 +207,13 @@ Here are key points to remember:
 1- Check the CHAT HISTORY to ensure the conversation doesn't exceed 4 exchanges between you and the user before calling your "Knowledge Base" API tool.
 2- ALWAYS ask if the user is getting an error message.
 3- NEVER request crypto addresses or transaction hashes/IDs.
-4- If the user mention their Ledger device, always clarify whether they're talking about the Nano S, Nano X or Nano S Plus.
-5- For issues related to a cryptocurrency, always inquire about the specific crypto coin or token involved and if the coin/token was transferred from an exchange. especially if the user hasn't mentioned it.
-6- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
-7- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop. For desktop users, further ask whether their operating system is Windows, macOS, or Linux.
-8- For issues involving a swap, it's crucial to ask which swap service the user used (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+4- NEVER ask the same question twice
+5- If the user mention their Ledger device, always clarify whether they're talking about the Nano S, Nano X or Nano S Plus.
+6- For issues related to a cryptocurrency, always inquire about the specific crypto coin or token involved and if the coin/token was transferred from an exchange. especially if the user hasn't mentioned it.
+7- For issues related to withdrawing/sending crypto from an exchange (such as Binance, Coinbase, Kraken, etc) to a Ledger wallet, always inquire which coins or token was transferred and which network the user selected for the withdrawal (Ethereum, Polygon, Arbitrum, etc).
+8- For connection issues, it's important to determine the type of connection the user is attempting. Please confirm whether they are using a USB or Bluetooth connection. Additionally, inquire if the connection attempt is with Ledger Live or another application. If they are using Ledger Live, ask whether it's on mobile or desktop and what operating system they are using (Windows, macOS, Linux, iPhone, Android).
+9- For issues involving a swap, it's crucial to ask which swap service the user used (such as Changelly, Paraswap, 1inch, etc.). Also, inquire about the specific cryptocurrencies they were attempting to swap (BTC/ETH, ETH/SOL, etc)
+10 For issues related to staking, always ask the user which staking service they're using.
     
 After the user replies and even if you have incomplete information, you MUST summarize your interaction and call your 'Knowledge Base' API tool. This approach helps maintain a smooth and effective conversation flow.
 
@@ -361,7 +363,7 @@ async def retrieve(user_input, locale, joint_query):
                     json={
 
                         "vector": xq, 
-                        "topK": 7,
+                        "topK": 5,
                         "namespace": "eng", 
                         "includeValues": True, 
                         "includeMetadata": True
@@ -389,7 +391,7 @@ async def retrieve(user_input, locale, joint_query):
                         json={
 
                             "vector": xq, 
-                            "topK": 7,
+                            "topK": 5,
                             "namespace": "eng", 
                             "includeValues": True, 
                             "includeMetadata": True
@@ -448,10 +450,6 @@ async def retrieve(user_input, locale, joint_query):
             rerank_response.raise_for_status()
             rerank_docs = rerank_response.json()
 
-            # # Fetch the top reranked document
-            # reranked = rerank_docs['results'][0]['document']['text']
-            # contexts.append(reranked)
-
             # Fetch all re-ranked documents
             for result in rerank_docs['results']:
                 reranked = result['document']['text']
@@ -460,7 +458,7 @@ async def retrieve(user_input, locale, joint_query):
         except Exception as e:
             print(f"Reranking failed: {e}")
             # Fallback to simpler retrieval without Cohere if reranking fails
-            res_query = index.query(xq, top_k=2, namespace=locale, include_metadata=True)
+
             sorted_items = sorted([item for item in res_query['matches'] if item['score'] > 0.70], key=lambda x: x['score'], reverse=True)
 
             for idx, item in enumerate(sorted_items):
@@ -583,7 +581,8 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
 
         # Use this extracted query to call the retrieve function
         retrieved_context = await retrieve(function_call_query, locale, joint_query='')
-        retrieved_context_string = retrieved_context[0]
+        #retrieved_context_string = retrieved_context[0]  # This will get the first item
+        retrieved_context_string = "\n".join(retrieved_context)  # This will get all the items separated with a line break
         if retrieved_context:
             troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context_string + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
             print(troubleshoot_instructions)
