@@ -416,7 +416,7 @@ async def retrieve(user_input, locale, joint_query):
   
             # Format docs from Pinecone response
             learn_more_text = ('\n\nLearn more at')
-            docs = [{"text": f"{x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
+            docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
                     for x in res_query["matches"]]
         
         except Exception as e:

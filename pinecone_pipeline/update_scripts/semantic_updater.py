@@ -12,7 +12,6 @@ load_dotenv()
 
 # Initialize Pinecone client
 pinecone_key = os.environ['PINECONE_API_KEY']
-print(os.environ['PINECONE_API_KEY'])
 index_name = 'serverless-test'
 pc_host = 'https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io'
 pc = Pinecone(api_key=pinecone_key)
