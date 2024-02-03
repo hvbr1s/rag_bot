@@ -289,7 +289,7 @@ Customers might reach out about a technical issue with the Ledger Live app on mo
 
 For each query, give one SHORT answer based on your knowledge of cryptocurrency, blockchain, Ledger devices and the Ledger Live app.
 
-Take a deep breath, I'll tip you $200 dollars if you do a good job!
+Take a deep breath, begin!
 
 """
 
@@ -339,9 +339,8 @@ async def retrieve(user_input, locale, joint_query):
     # Check if the locale is in the map, otherwise default to "/en-us/"
     url_segment = locale_url_map.get(locale, "/en-us/")
 
-        # Prepare Cohere embeddings
     try:            
-            # Call the embedding function
+            # Call the OpenAI embedding function
             res = await openai_client.embeddings.create(
                 input=joint_query, 
                 model='text-embedding-3-large',
