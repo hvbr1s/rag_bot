@@ -281,44 +281,51 @@ async def chat(chat):
 # Function to expand the user's question:
 EXPANDER_PROMPT = """
 
-You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
-
-Your role is to provide technical answers to queries from Ledger customers seeking assistance.
-
-Customers might reach out about a technical issue with the Ledger Live app on mobile or desktop, or an issue with their Ledger device (Nano S, Nano X or Nano S Plus) or an issue with an order from the Ledger store.
-
-For each query, give one SHORT answer based on your knowledge of cryptocurrency, blockchain, Ledger devices and the Ledger Live app.
-
-Take a deep breath, begin!
+Rewrite the following user query into a clear, specific, and
+formal request suitable for retrieving relevant information from a vector database.
+Keep in mind that your rewritten query will be sent to a vector database, which
+does similarity search for retrieving documents.
 
 """
 
 # Augment query function
 async def augment_query_generated(user_input):
-    try:
-        messages = [
-            {
-                "role": "system",
-                "content": EXPANDER_PROMPT
-            },
-            {
-                "role": "user", 
-                "content": user_input
-            }
-        ] 
+    async with httpx.AsyncClient() as client:
+        try:
 
-        res = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo-1106",
-            temperature= 0.0,
-            messages=messages,
-            timeout=8.0,
-        )
-        reply = res.choices[0].message.content
-        return reply
-    except Exception as e:
-        print(f"OpenAI couldn't generate an augmented query: {e}")
-        no_output = ""
-        return no_output
+            command_response = await client.post(
+                "https://api.cohere.ai/v1/chat",
+                json={
+
+                    "message": user_input,
+                    "model": "command",
+                    "preamble_override": EXPANDER_PROMPT,
+                    "temperature": 0.0,
+                    "search_queries_only": True,
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}"
+
+                },
+                timeout=30.0,
+
+            )
+            command_response.raise_for_status()
+            rep = command_response.json()
+
+            # Extract and return chat response
+            reply = rep['search_queries']
+            rewritten_queries = [query.get('text', None) for query in reply]
+            rply = ' '.join(rewritten_queries)
+
+            return rply
+        
+        except Exception as e:
+            print(f"Cohere couln't re-write the query: {e}")
+            no_output = ""
+            return no_output
 
           
 # Retrieve and re-rank function
