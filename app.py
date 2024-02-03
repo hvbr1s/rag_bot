@@ -290,42 +290,64 @@ does similarity search for retrieving documents.
 
 # Augment query function
 async def augment_query_generated(user_input):
-    async with httpx.AsyncClient() as client:
         try:
+            try: 
+                async with httpx.AsyncClient() as client:
+             
+                    command_response = await client.post(
+                        "https://api.cohere.ai/v1/chat",
+                        json={
 
-            command_response = await client.post(
-                "https://api.cohere.ai/v1/chat",
-                json={
+                            "message": user_input,
+                            "model": "command",
+                            "preamble_override": EXPANDER_PROMPT,
+                            "temperature": 0.0,
+                            "search_queries_only": True,
 
-                    "message": user_input,
-                    "model": "command",
-                    "preamble_override": EXPANDER_PROMPT,
-                    "temperature": 0.0,
-                    "search_queries_only": True,
+                        },
+                        headers={
 
-                },
-                headers={
+                            "Authorization": f"Bearer {cohere_key}"
 
-                    "Authorization": f"Bearer {cohere_key}"
+                        },
+                        timeout=20.0,
 
-                },
-                timeout=30.0,
+                    )
+                    command_response.raise_for_status()
+                    rep = command_response.json()
 
-            )
-            command_response.raise_for_status()
-            rep = command_response.json()
+                    # Extract and return chat response
+                    reply = rep['search_queries']
+                    rewritten_queries = [query.get('text', None) for query in reply]
+                    rply = ' '.join(rewritten_queries)
+    
+            except Exception as e:
+                print(f"Cohere couln't re-write the query: {e}")
+                messages = [
+                    {
+                        "role": "system",
+                        "content": EXPANDER_PROMPT
+                    },
+                    {
+                        "role": "user", 
+                        "content": user_input
+                    }
+                ] 
 
-            # Extract and return chat response
-            reply = rep['search_queries']
-            rewritten_queries = [query.get('text', None) for query in reply]
-            rply = ' '.join(rewritten_queries)
-
-            return rply
+                res = await openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo-1106",
+                    temperature= 0.0,
+                    messages=messages,
+                    timeout=8.0,
+                )
+                rply = res.choices[0].message.content
         
         except Exception as e:
-            print(f"Cohere couln't re-write the query: {e}")
-            no_output = ""
-            return no_output
+            print(f"OpenAI couln't re-write the query: {e}")
+            rply = ""
+            
+        print(rply)
+        return rply
 
           
 # Retrieve and re-rank function
