@@ -485,10 +485,10 @@ When summarizing, always summarize in the first person. For example: "I encounte
 
 """
 
-async def summarize(user_interaction, joint_query):
+async def summarize(user_interaction, user_input):
 
-    to_summarize = (user_interaction + ". " + joint_query).replace('\n', ' ')
-    print(to_summarize)
+    to_summarize = (user_interaction).replace('\n', ' ') + user_input
+    print('To summarize: ' + to_summarize)
 
     async with httpx.AsyncClient() as client:
         try:
@@ -508,7 +508,7 @@ async def summarize(user_interaction, joint_query):
                     "Authorization": f"Bearer {cohere_key}"
 
                 },
-                timeout=20.0,
+                timeout=30.0,
 
             )
             cohere_response.raise_for_status()
@@ -543,18 +543,19 @@ async def rag(primer, timestamp, user_id, locale, user_input, platform):
     user_interaction = ""
     assistant_interaction = ""
     for conv in previous_conversations:
-        user_interaction += f"{conv[0]}\n"
+        user_interaction += f"User: {conv[0]}\n"
         assistant_interaction += f"Assistant: {conv[1]}\n\n"
 
     # Combine user and assistant interactions
-    previous_conversation = user_interaction + assistant_interaction
+    previous_conversation =  user_interaction + assistant_interaction
+    print(previous_conversation)
 
     # Initialize summary
     summary = None
 
     if previous_conversations:
         # Summarize conversation
-        summary = await summarize(user_interaction, joint_query)
+        summary = await summarize(user_interaction.replace('User:', ' '), user_input)
     
     # Start date retrieval and reranking
     contexts = await retrieve(summary if summary else '',  locale, joint_query, user_input)
