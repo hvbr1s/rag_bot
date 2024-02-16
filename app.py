@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from nostril import nonsense
+from semantic_router import Route
+from semantic_router.layer import RouteLayer
+from semantic_router.encoders import OpenAIEncoder
 import re
 import time
 import cohere
@@ -49,10 +52,11 @@ pinecone_key = os.environ['PINECONE_API_KEY']
 #         host=pc_host
 #     )
 
-# Initialize OpenAI client & Embedding model
+# Initialize OpenAI client & Embedding model & Encoder for routing
 openai_key = os.environ['OPENAI_API_KEY']
 openai_client = AsyncOpenAI(api_key=openai_key)
 embed_model = "text-embedding-3-large"
+encoder = OpenAIEncoder()
 
 # Initialize Cohere
 co = cohere.Client(os.environ["COHERE_API_KEY"])
@@ -165,6 +169,38 @@ tools = [
 }
 ]
 
+########   ROUTES   ##########
+chitchat = Route(
+    name="chitchat",
+    utterances=[
+        "hello",
+        "hi",
+        "bonjour",
+        "salut",
+        "how are you?",
+        "I need help",
+        "help"
+        ""
+
+    ],
+)
+agent = Route(
+    name="agent",
+    utterances=[
+        "agent",
+        "representative",
+        "speak to human",
+        "talk to agent",
+        "transfer to operator",
+        "I want to speak to a person",
+        "support",
+    ],
+)
+
+# we place both of our decisions together into single list
+routes = [chitchat, agent]
+rl = RouteLayer(encoder=encoder, routes=routes)  
+
 ######## FUNCTIONS  ##########
 
 # Function to replace crypto addresses
@@ -237,8 +273,7 @@ async def chat(chat):
         # Call the API to get a response
         res = await openai_client.chat.completions.create(
             temperature=0.0,
-            model='gpt-4-1106-preview',
-            #model='gpt-3.5-turbo-1106',
+            model='gpt-4-turbo-preview',
             messages=messages,
             tools=tools,
             tool_choice="auto",
@@ -296,29 +331,54 @@ Take a deep breath, begin!
 # Augment query function
 async def augment_query_generated(user_input):
     try:
-        messages = [
-            {
-                "role": "system",
-                "content": EXPANDER_PROMPT
-            },
-            {
-                "role": "user", 
-                "content": user_input
-            }
-        ] 
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://api.cohere.ai/v1/chat",
+                json={
 
-        res = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo-1106",
-            temperature= 0.0,
-            messages=messages,
-            timeout=8.0,
-        )
-        reply = res.choices[0].message.content
-        return reply
+                    "model": "command",
+                    "message": user_input,
+                    # "preamble_override": REWRITER_PROMPT, 
+                    "search_queries_only": True
+
+                },
+                headers={
+
+                    "Authorization": f"Bearer {cohere_key}",
+
+                },
+                timeout=10,
+            )
+            res.raise_for_status()
+            queries = res.json()
+            reply = '\n'.join([query['text'] for query in queries['search_queries']])
+
     except Exception as e:
-        print(f"OpenAI couldn't generate an augmented query: {e}")
-        no_output = ""
-        return no_output
+        print(f"Cohere couldn't generate an augmented query: {e}")
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": EXPANDER_PROMPT
+                },
+                {
+                    "role": "user", 
+                    "content": user_input
+                }
+            ] 
+
+            res = await openai_client.chat.completions.create(
+                model="gpt-3.5-turbo-0125",
+                temperature= 0.0,
+                messages=messages,
+                timeout=8.0,
+            )
+            reply = res.choices[0].message.content
+
+        except Exception as e:
+            print(f"OpenAI couldn't generate an augmented query: {e}")
+            reply = ""
+    return reply
 
           
 # Retrieve and re-rank function
@@ -420,7 +480,7 @@ async def retrieve(user_input, locale, joint_query):
         
         except Exception as e:
             print(f"Pinecone query failed: {e}")
-            return
+            docs = "I couldn't contact my knowledge base."
 
         # Try re-ranking with Cohere
         try:
@@ -473,7 +533,7 @@ async def retrieve(user_input, locale, joint_query):
 async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query):
 
     # Choose OpenAI model depending on where the query is coming from
-    llm = 'gpt-4-1106-preview' if platform in ["slack", "discord", "other"] else 'gpt-4-1106-preview'
+    llm = 'gpt-4-turbo-preview' if platform in ["slack", "discord", "web"] else 'gpt-4-turbo-preview'
 
     # Retrieve and format previous conversation history for a specific user_id
     previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
@@ -560,8 +620,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
     print(
                 joint_query + "\n",
                 augmented_query + "\n",
-                reply + "\n\n"
-                  
+                reply + "\n\n"                
     )
     return reply
 
@@ -590,8 +649,7 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
                 # Request OpenAI completion            
                 res = await openai_client.chat.completions.create(
                     temperature=0.0,
-                    #model='gpt-4',
-                    model='gpt-4-1106-preview',
+                    model='gpt-4-turbo-preview',
                     messages=[
 
                         {"role": "system", "content": primer},
@@ -678,6 +736,18 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     # Apply nonsense filter
     if not user_input or nonsense(user_input):
         return handle_nonsense(locale)
+    
+    route_path = rl(user_input).name
+    if route_path in ["chitchat", "agent"]:
+        if route_path == "chitchat":
+            return {
+                "output": "Hello! How can I assist you today? Please describe your issue in as much detail as possible, including your Ledger device model (Nano S, Nano X, or Nano S Plus), any error messages you're encountering, and the type of crypto (e.g., Bitcoin, Ethereum, Solana, XRP, or another)."
+            }
+        else:
+            return {
+                "output": "Hello! To speak with a human agent, please click on the 'Speak to an agent' button for assistance."
+            }
+
     else:
         try:
             # Set clock
@@ -761,7 +831,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     # Apply nonsense filter
     if not user_input or nonsense(user_input):
         return handle_nonsense(locale)
-
+    
     else:
         try:
             # Set clock
