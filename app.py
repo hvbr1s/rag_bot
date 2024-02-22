@@ -8,7 +8,6 @@ from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
-from nostril import nonsense
 from semantic_router import Route
 from semantic_router.layer import RouteLayer
 from semantic_router.encoders import OpenAIEncoder
@@ -52,11 +51,15 @@ pinecone_key = os.environ['PINECONE_API_KEY']
 #         host=pc_host
 #     )
 
-# Initialize OpenAI client & Embedding model & Encoder for routing
+# Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
-openai_client = AsyncOpenAI(api_key=openai_key)
+openai_client = AsyncOpenAI(
+
+    api_key=openai_key,
+    
+)
+
 embed_model = "text-embedding-3-large"
-encoder = OpenAIEncoder()
 
 # Initialize Cohere
 co = cohere.Client(os.environ["COHERE_API_KEY"])
@@ -107,16 +110,6 @@ def load_sysprompt(locale):
 
 # Pre-load prompts
 system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES}
-
-# Define helpers functions & dictionaries
-def handle_nonsense(locale):
-    messages = {
-        'fr': "Je suis désolé, je n'ai pas compris votre question et je ne peux pas aider avec des questions qui incluent des adresses de cryptomonnaie. Pourriez-vous s'il vous plaît fournir plus de détails ou reformuler sans l'adresse ? N'oubliez pas, je suis ici pour aider avec toute demande liée à Ledger.",
-        'ru': "Извините, я не могу понять ваш вопрос, и я не могу помочь с вопросами, содержащими адреса криптовалют. Не могли бы вы предоставить более подробную информацию или перефразировать вопрос без упоминания адреса? Помните, что я готов помочь с любыми вопросами, связанными с Ledger.",
-        'default': "I'm sorry, I didn't quite get your question, and I can't assist with questions that include cryptocurrency addresses or transaction hashes. Could you please provide more details or rephrase it without the address? Remember, I'm here to help with any Ledger-related inquiries."
-    }
-    print('Nonsense detected!')
-    return {'output': messages.get(locale, messages['default'])}
 
 # Translations dictionary
 translations = {
@@ -169,7 +162,8 @@ tools = [
 }
 ]
 
-########   ROUTES   ##########
+########   SEMANTIC ROUTING  ##########
+
 chitchat = Route(
     name="chitchat",
     utterances=[
@@ -179,8 +173,13 @@ chitchat = Route(
         "salut",
         "how are you?",
         "I need help",
-        "help"
-        ""
+        "j'ai besoin d'aide",
+        "help me!",
+        "Привет",
+        "Здравствуйте",
+        "Добрый день",
+        "hdkfebkejb",
+        "null", 
 
     ],
 )
@@ -194,12 +193,60 @@ agent = Route(
         "transfer to operator",
         "I want to speak to a person",
         "support",
+        "human",
+        "operator",
+        "live support",
+        "live chat",
     ],
 )
 
-# we place both of our decisions together into single list
+niceties = Route(
+    name="agent",
+    utterances=[
+        "thanks!",
+        "thank you very much",
+        "merci!",
+        "thanks for your help!",
+        "Super, merci!",
+        "Спасибо",
+        "Благодарю",
+        "human",
+        "Спасибо большое",
+
+    ],
+)
+
+
+# Initialize routes and encoder
 routes = [chitchat, agent]
-rl = RouteLayer(encoder=encoder, routes=routes)  
+encoder = OpenAIEncoder(
+    name="text-embedding-ada-002",
+    score_threshold=0.82,
+)
+rl = RouteLayer(
+    encoder=encoder, 
+    routes=routes
+)  
+
+
+ROUTER_DICTIONARY = {
+
+        "chitchat": {
+            "eng": "Hello! How can I assist you today? Please describe your issue in as much detail as possible, including your Ledger device model (Nano S, Nano X, or Nano S Plus), any error messages you're encountering, and the type of crypto (e.g., Bitcoin, Ethereum, Solana, XRP, or another).",
+            "fr": "Bonjour ! Comment puis-je vous aider aujourd'hui ? Veuillez décrire votre problème avec autant de détails que possible, y compris le modèle de votre appareil Ledger (Nano S, Nano X ou Nano S Plus), tous les messages d'erreur que vous rencontrez et le type de crypto-monnaie (par exemple, Bitcoin, Ethereum, Solana, XRP ou autre).",
+            "ru": "Привет! Как я могу помочь вам сегодня? Пожалуйста, опишите свою проблему как можно подробнее, включая модель вашего устройства Ledger (Nano S, Nano X или Nano S Plus), любые сообщения об ошибках, с которыми вы столкнулись, и тип криптовалюты (например, Bitcoin, Ethereum, Solana, XRP или другую)."
+        },
+        "agent": {
+            "eng": "Hello! To speak with a human agent, please click on the 'Speak to an agent' button for assistance.",
+            "fr": "Bonjour! Pour parler à un agent humain, veuillez cliquer sur le bouton 'Parler à un agent' pour obtenir de l'aide.",
+            "ru": "Привет! Чтобы поговорить с агентом техподдержки, пожалуйста, нажмите кнопку ‘Говорить с агентом’ для получения помощи."
+        },
+        "niceties": {
+            "eng": "You're welcome! If you have any more questions about cryptocurrencies, or how to use your Ledger device, don't hesitate to ask!",
+            "fr": "De rien ! Si vous avez d'autres questions sur les cryptomonnaies ou sur l'utilisation de votre appareil Ledger, n'hésitez pas à demander!",
+            "ru": "Пожалуйста! Если у вас остались вопросы о криптовалюте или о том, как использовать ваше устройство Ledger, не стесняйтесь их задавать!"
+        }
+}
 
 ######## FUNCTIONS  ##########
 
@@ -277,7 +324,7 @@ async def chat(chat):
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            timeout= 30.0
+            timeout= 30.0,
         )
         
     except Exception as e:
@@ -316,13 +363,9 @@ async def chat(chat):
 # Function to expand the user's question:
 EXPANDER_PROMPT = """
 
-You are a helpful expert crypto research assistant working for Ledger, the crypto hardware wallet company,
+Using your knowledge of Ledger products, Ledger Live and cryptocurrencies, rewrite the following user query into a clear, specific, and formal request suitable for retrieving relevant information from a vector database.
 
-Your role is to provide technical answers to queries from Ledger customers seeking assistance.
-
-Customers might reach out about a technical issue with the Ledger Live app on mobile or desktop, or an issue with their Ledger device (Nano S, Nano X or Nano S Plus) or an issue with an order from the Ledger store.
-
-For each query, give one SHORT answer based on your knowledge of cryptocurrency, blockchain, Ledger devices and the Ledger Live app.
+Keep in mind that your rewritten query will be sent to a vector database, which does similarity search for retrieving documents.
 
 Take a deep breath, begin!
 
@@ -338,7 +381,6 @@ async def augment_query_generated(user_input):
 
                     "model": "command",
                     "message": user_input,
-                    # "preamble_override": REWRITER_PROMPT, 
                     "search_queries_only": True
 
                 },
@@ -530,7 +572,7 @@ async def retrieve(user_input, locale, joint_query):
 
 
 # Legacy RAG function
-async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query):
+async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query, route_path):
 
     # Choose OpenAI model depending on where the query is coming from
     llm = 'gpt-4-turbo-preview' if platform in ["slack", "discord", "web"] else 'gpt-4-turbo-preview'
@@ -618,6 +660,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
                     return("Snap! Something went wrong, please try again!")
 
     print(
+                "\n" + f"Route path: {route_path}" + "\n",
                 joint_query + "\n",
                 augmented_query + "\n",
                 reply + "\n\n"                
@@ -703,7 +746,18 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
 
         return reply
 
-
+# Concise input function:
+    
+def extract_concise_input(user_input):
+    # Find the index of the first occurrence of ":"
+    end_index = user_input.find(":")
+    
+    if end_index != -1:
+        # Extract the substring after the first ":"
+        concise_input = user_input[end_index + 1:].strip()
+        return concise_input
+    else:
+        return user_input
 
 ######## ROUTES ##########
 
@@ -720,6 +774,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     # Deconstruct incoming query
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
+    concise_query = extract_concise_input(user_input)
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
     platform = query.platform
 
@@ -733,70 +788,61 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         'timestamp': convo_start
     })
 
-    # Apply nonsense filter
-    if not user_input or nonsense(user_input):
-        return handle_nonsense(locale)
-    
-    route_path = rl(user_input).name
-    if route_path in ["chitchat", "agent"]:
-        if route_path == "chitchat":
-            return {
-                "output": "Hello! How can I assist you today? Please describe your issue in as much detail as possible, including your Ledger device model (Nano S, Nano X, or Nano S Plus), any error messages you're encountering, and the type of crypto (e.g., Bitcoin, Ethereum, Solana, XRP, or another)."
-            }
-        else:
-            return {
-                "output": "Hello! To speak with a human agent, please click on the 'Speak to an agent' button for assistance."
-            }
+    try:
+        # Set clock
+        timestamp = datetime.now().strftime("%B %d, %Y")
 
-    else:
+        # Prepare enriched user query
+        augmented_query = await augment_query_generated(user_input)
+        joint_query = f"{user_input} {augmented_query}"
+
+        # Filter non-queries
+        route_path = rl(concise_query).name
+        if route_path in ["chitchat", "agent", "niceties"]:
+            print(f'Concise query: {concise_query} -> Route triggered: {route_path}')
+            output = ROUTER_DICTIONARY[route_path].get(locale, "Language not supported")
+            return {"output": output}
+
+        # Start date retrieval and reranking
+        contexts = await retrieve(user_input, locale, joint_query)
+
+        # Start RAG
+        response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query, route_path)
+
+        #Clean response
+        cleaned_response = await remove_double_asterisks(response)            
+
+        # Save the response to a thread
         try:
-            # Set clock
-            timestamp = datetime.now().strftime("%B %d, %Y")
+            USER_STATES[user_id] = {
+                'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, cleaned_response)],
+                'timestamp': convo_start
+            }
 
-            # Prepare enriched user query
-            hypothetical_answer = await augment_query_generated(user_input)
-            joint_query = f"{user_input} {hypothetical_answer}"
-
-            # Start date retrieval and reranking
-            contexts = await retrieve(user_input, locale, joint_query)
-
-            # Start RAG
-            response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query)
-
-            #Clean response
-            cleaned_response = await remove_double_asterisks(response)            
-
-            # Save the response to a thread
-            try:
-                USER_STATES[user_id] = {
-                    'previous_queries': USER_STATES[user_id].get('previous_queries', []) + [(user_input, cleaned_response)],
-                    'timestamp': convo_start
-                }
-
-            except Exception as e:
-                print("Saving thread failed!")
-                                         
-            # Return response to user
-            return {'output': cleaned_response}
-    
-        except ValueError as e:
-            print(e)
-            raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
-        
-        except HTTPException as e:
-            print(e)
-            # Handle known HTTP exceptions
-            return JSONResponse(
-                status_code=e.status_code,
-                content={"message": e.detail},
-            )
         except Exception as e:
-            print(e)
-            # Handle other unexpected exceptions
-            return JSONResponse(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"message": "Snap! Something went wrong, please try again!"},
-            )
+            print("Saving thread failed!")
+                                        
+        # Return response to user
+        return {'output': cleaned_response}
+    
+    except ValueError as e:
+        print(e)
+        raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
+    
+    except HTTPException as e:
+        print(e)
+        # Handle known HTTP exceptions
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"message": e.detail},
+        )
+    except Exception as e:
+        print(e)
+        # Handle other unexpected exceptions
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": "Snap! Something went wrong, please try again!"},
+        )
         
 # RAGChat route
 @app.post('/chat') 
@@ -828,12 +874,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     # Construct the query string with complete chat history
     chat_history = f"CHAT HISTORY: \n\n{formatted_history.strip()}"
 
-    # Apply nonsense filter
-    if not user_input or nonsense(user_input):
-        return handle_nonsense(locale)
-    
-    else:
-        try:
+    try:
             # Set clock
             timestamp = datetime.now().strftime("%B %d, %Y")
 
@@ -854,24 +895,24 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             # Return response to user
             return {'output': cleaned_response}
     
-        except ValueError as e:
-            print(e)
-            raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
-        
-        except HTTPException as e:
-            print(e)
-            # Handle known HTTP exceptions
-            return JSONResponse(
-                status_code=e.status_code,
-                content={"message": e.detail},
-            )
-        except Exception as e:
-            print(e)
-            # Handle other unexpected exceptions
-            return JSONResponse(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"message": "Snap! Something went wrong, please try again!"},
-            )
+    except ValueError as e:
+        print(e)
+        raise HTTPException(status_code=400, detail="Snap! Something went wrong, please try again!")
+    
+    except HTTPException as e:
+        print(e)
+        # Handle known HTTP exceptions
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"message": e.detail},
+        )
+    except Exception as e:
+        print(e)
+        # Handle other unexpected exceptions
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": "Snap! Something went wrong, please try again!"},
+        )
 
 
 # Local start command: uvicorn app:app --reload --port 8800
