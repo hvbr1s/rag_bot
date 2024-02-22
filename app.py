@@ -201,7 +201,7 @@ agent = Route(
 )
 
 niceties = Route(
-    name="agent",
+    name="niceties",
     utterances=[
         "thanks!",
         "thank you very much",
@@ -212,16 +212,18 @@ niceties = Route(
         "Благодарю",
         "human",
         "Спасибо большое",
+        "okay",
+        "ok ok",
 
     ],
 )
 
 
 # Initialize routes and encoder
-routes = [chitchat, agent]
+routes = [chitchat, agent, niceties]
 encoder = OpenAIEncoder(
-    name="text-embedding-ada-002",
-    score_threshold=0.82,
+    name="text-embedding-3-small",
+    score_threshold=0.45,
 )
 rl = RouteLayer(
     encoder=encoder, 
