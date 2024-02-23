@@ -25,7 +25,11 @@ def create_metadata_string(metadata: dict):
 
 
 def clean_and_save_html(article_url, output_folder):
-    response = requests.get(article_url)
+    try:
+        response = requests.get(article_url)
+    except requests.exceptions.TooManyRedirects:
+        print(f"Exceeded redirect limit for {article_url}")
+        return
     soup = BeautifulSoup(response.content, 'html.parser')
 
     # Extract the <article> tag
