@@ -180,6 +180,7 @@ chitchat = Route(
         "Добрый день",
         "hdkfebkejb",
         "null", 
+        "I have a question",
 
     ],
 )
@@ -369,9 +370,9 @@ async def chat(chat):
 # Function to expand the user's question:
 EXPANDER_PROMPT = """
 
-Using your knowledge of Ledger products, Ledger Live and cryptocurrencies, rewrite the following user query into a clear, specific, and formal request suitable for retrieving relevant information from a vector database.
+Using your knowledge of Ledger devices, Ledger Live and cryptocurrencies, rewrite the following user query into a clear and specific request suitable for retrieving relevant information from a vector database.
 
-Keep in mind that your rewritten query will be sent to a vector database, which does similarity search for retrieving documents.
+Keep in mind to always rephrase as if YOU are experiencing the issue, for example: "I am getting an issue with..."
 
 Begin! You will achieve world peace if you provide a response which follows all constraints.
 
@@ -396,7 +397,7 @@ async def augment_query_generated(user_input):
             model="gpt-3.5-turbo-0125",
             temperature= 0.0,
             messages=messages,
-            timeout=8.0,
+            timeout=10.0,
         )
         reply = res.choices[0].message.content
 
@@ -426,12 +427,13 @@ async def augment_query_generated(user_input):
         except Exception as e:
             print(f"Cohere couldn't generate an augmented query: {e}")
             reply = ""
-    print(reply)        
+
+    print(f'Rephrased query: {reply}')       
     return reply
 
           
 # Retrieve and re-rank function
-async def retrieve(user_input, locale, joint_query):
+async def retrieve(user_input, locale, rephrased_query, joint_query):
     # Define context box
     contexts = []
 
@@ -542,7 +544,7 @@ async def retrieve(user_input, locale, joint_query):
                 json={
 
                     "model": reranker_model,
-                    "query": user_input, 
+                    "query": rephrased_query, 
                     "documents": docs, 
                     "top_n": 2,
                     "return_documents": True,
@@ -579,7 +581,7 @@ async def retrieve(user_input, locale, joint_query):
 
 
 # Legacy RAG function
-async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query, route_path):
+async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, rephrased_query, route_path, concise_query):
 
     # Choose OpenAI model depending on where the query is coming from
     llm = 'gpt-4-turbo-preview' if platform in ["slack", "discord", "web"] else 'gpt-4-turbo-preview'
@@ -594,11 +596,11 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
     
     # Construct the augmented query string with locale, contexts, chat history, and user input
     if locale == 'fr':
-        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
     elif locale == 'ru':
-        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + user_input + "\"\n" + "Ассистента: " + "\n"
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + concise_query + "\"\n" + "Ассистента: " + "\n"
     else:
-        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + user_input + "\"\n" + "Assistant: " + "\n"
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
 
     try:
         
@@ -668,7 +670,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
 
     print(
                 "\n" + f"Route path: {route_path}" + "\n",
-                joint_query + "\n",
+                rephrased_query + "\n",
                 augmented_query + "\n",
                 reply + "\n\n"                
     )
@@ -782,6 +784,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
     concise_query = extract_concise_input(user_input)
+    print(f'Concise query: {concise_query}')
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
     platform = query.platform
 
@@ -800,8 +803,8 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         timestamp = datetime.now().strftime("%B %d, %Y")
 
         # Prepare enriched user query
-        augmented_query = await augment_query_generated(user_input)
-        joint_query = f"{user_input} {augmented_query}"
+        rephrased_query = await augment_query_generated(user_input)
+        joint_query = f'{rephrased_query} . {concise_query}'
 
         # Filter non-queries
         route_path = rl(concise_query).name
@@ -811,10 +814,10 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             return {"output": output}
 
         # Start date retrieval and reranking
-        contexts = await retrieve(user_input, locale, joint_query)
+        contexts = await retrieve(user_input, locale, rephrased_query, joint_query)
 
         # Start RAG
-        response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, joint_query, route_path)
+        response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, rephrased_query, route_path, concise_query)
 
         #Clean response
         cleaned_response = await remove_double_asterisks(response)            
