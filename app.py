@@ -197,6 +197,8 @@ agent = Route(
         "operator",
         "live support",
         "live chat",
+        "147999 Issue",
+        "Case ID 8888888",
     ],
 )
 
@@ -222,12 +224,14 @@ niceties = Route(
 # Initialize routes and encoder
 routes = [chitchat, agent, niceties]
 encoder = OpenAIEncoder(
-    name="text-embedding-3-small",
+    #name="text-embedding-ada-002",
+    name='text-embedding-3-small',
     score_threshold=0.45,
 )
 rl = RouteLayer(
     encoder=encoder, 
-    routes=routes
+    routes=routes,
+    
 )  
 
 
@@ -308,7 +312,7 @@ If a user needs to contact Ledger Support, they can do so at https://support.led
 
 NEVER use your API tool when a user simply thank you or greet you!
 
-Take a deep breath, I'll tip you $200 dollars if you do a good job!
+Begin! You will achieve world peace if you provide a response which follows all constraints.
 
 """
 
@@ -369,38 +373,15 @@ Using your knowledge of Ledger products, Ledger Live and cryptocurrencies, rewri
 
 Keep in mind that your rewritten query will be sent to a vector database, which does similarity search for retrieving documents.
 
-Take a deep breath, begin!
+Begin! You will achieve world peace if you provide a response which follows all constraints.
 
 """
 
 # Augment query function
 async def augment_query_generated(user_input):
     try:
-        async with httpx.AsyncClient() as client:
-            res = await client.post(
-                "https://api.cohere.ai/v1/chat",
-                json={
 
-                    "model": "command",
-                    "message": user_input,
-                    "search_queries_only": True
-
-                },
-                headers={
-
-                    "Authorization": f"Bearer {cohere_key}",
-
-                },
-                timeout=10,
-            )
-            res.raise_for_status()
-            queries = res.json()
-            reply = '\n'.join([query['text'] for query in queries['search_queries']])
-
-    except Exception as e:
-        print(f"Cohere couldn't generate an augmented query: {e}")
-        try:
-            messages = [
+        messages = [
                 {
                     "role": "system",
                     "content": EXPANDER_PROMPT
@@ -409,19 +390,43 @@ async def augment_query_generated(user_input):
                     "role": "user", 
                     "content": user_input
                 }
-            ] 
+        ] 
 
-            res = await openai_client.chat.completions.create(
-                model="gpt-3.5-turbo-0125",
-                temperature= 0.0,
-                messages=messages,
-                timeout=8.0,
-            )
-            reply = res.choices[0].message.content
+        res = await openai_client.chat.completions.create(
+            model="gpt-3.5-turbo-0125",
+            temperature= 0.0,
+            messages=messages,
+            timeout=8.0,
+        )
+        reply = res.choices[0].message.content
 
+    except Exception as e:
+        print(f"OpenAI couldn't generate an augmented query: {e}")
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.post(
+                    "https://api.cohere.ai/v1/chat",
+                    json={
+
+                        "model": "command",
+                        "message": user_input,
+                        "search_queries_only": True
+
+                    },
+                    headers={
+
+                        "Authorization": f"Bearer {cohere_key}",
+
+                    },
+                    timeout=10,
+                )
+                res.raise_for_status()
+                queries = res.json()
+                reply = '\n'.join([query['text'] for query in queries['search_queries']])
         except Exception as e:
-            print(f"OpenAI couldn't generate an augmented query: {e}")
+            print(f"Cohere couldn't generate an augmented query: {e}")
             reply = ""
+    print(reply)        
     return reply
 
           
