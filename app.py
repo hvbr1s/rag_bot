@@ -200,6 +200,7 @@ agent = Route(
         "live chat",
         "147999 Issue",
         "Case ID 8888888",
+
     ],
 )
 
@@ -221,15 +222,34 @@ niceties = Route(
     ],
 )
 
+languages = Route(
+
+    name="languages",
+    utterances=[
+        "Can I input text in Russian language?",
+        "Can I write Russian?",
+        "Sprechen sie deutsch?",
+        "Do you speak German?",
+        "Do you speak Russian?",
+        "Est-ce que je peux poser ma question en Francais?",
+        "вы говорите по-русски?",
+        "Türkçe konuşuyor musunuz?",
+        "Türkçe biliyor musunuz?",
+        "你会说土耳其语吗?",
+
+    ],
+)
+
 
 # Initialize routes and encoder
-routes = [chitchat, agent, niceties]
+routes = [chitchat, agent, niceties, languages]
 encoder = OpenAIEncoder(
     #name="text-embedding-ada-002",
     name='text-embedding-3-small',
     score_threshold=0.45,
 )
 rl = RouteLayer(
+
     encoder=encoder, 
     routes=routes,
     
@@ -243,15 +263,23 @@ ROUTER_DICTIONARY = {
             "fr": "Bonjour ! Comment puis-je vous aider aujourd'hui ? Veuillez décrire votre problème avec autant de détails que possible, y compris le modèle de votre appareil Ledger (Nano S, Nano X ou Nano S Plus), tous les messages d'erreur que vous rencontrez et le type de crypto-monnaie (par exemple, Bitcoin, Ethereum, Solana, XRP ou autre).",
             "ru": "Привет! Как я могу помочь вам сегодня? Пожалуйста, опишите свою проблему как можно подробнее, включая модель вашего устройства Ledger (Nano S, Nano X или Nano S Plus), любые сообщения об ошибках, с которыми вы столкнулись, и тип криптовалюты (например, Bitcoin, Ethereum, Solana, XRP или другую)."
         },
+
         "agent": {
             "eng": "Hello! To speak with a human agent, please click on the 'Speak to an agent' button for assistance.",
             "fr": "Bonjour! Pour parler à un agent humain, veuillez cliquer sur le bouton 'Parler à un agent' pour obtenir de l'aide.",
             "ru": "Привет! Чтобы поговорить с агентом техподдержки, пожалуйста, нажмите кнопку ‘Говорить с агентом’ для получения помощи."
         },
+
         "niceties": {
             "eng": "You're welcome! If you have any more questions about cryptocurrencies, or how to use your Ledger device, don't hesitate to ask!",
             "fr": "De rien ! Si vous avez d'autres questions sur les cryptomonnaies ou sur l'utilisation de votre appareil Ledger, n'hésitez pas à demander!",
             "ru": "Пожалуйста! Если у вас остались вопросы о криптовалюте или о том, как использовать ваше устройство Ledger, не стесняйтесь их задавать!"
+        },
+
+        "languages": {
+            "eng": "Hello! As an AI assistant, I can understand several languages but I can respond only in English, French, or Russian. However, feel free to ask your question in the language you're most comfortable with. Please describe your issue in as much detail as possible, including your Ledger device model (Nano S, Nano X, or Nano S Plus), any error messages you're encountering, and the type of crypto (e.g., Bitcoin, Ethereum, Solana, XRP, or another).",
+            "fr": "Bonjour! Oui je parle français. Comment puis-je vous aider aujourd'hui ? Veuillez décrire votre problème avec autant de détails que possible, y compris le modèle de votre appareil Ledger (Nano S, Nano X ou Nano S Plus), tous les messages d'erreur que vous rencontrez et le type de crypto-monnaie (par exemple, Bitcoin, Ethereum, Solana, XRP ou autre).",
+            "ru": "Здравствуйте! Да, я говорю по-русски. Как я могу помочь вам сегодня? Пожалуйста, опишите свою проблему как можно подробнее, включая модель вашего устройства Ledger (Nano S, Nano X или Nano S Plus), любые сообщения об ошибках, с которыми вы столкнулись, и тип криптовалюты (например, Bitcoin, Ethereum, Solana, XRP или другую)."
         }
 }
 
@@ -473,7 +501,7 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
                     json={
 
                         "vector": xq, 
-                        "topK": 5,
+                        "topK": 8,
                         "namespace": "eng", 
                         "includeValues": True, 
                         "includeMetadata": True
@@ -501,7 +529,7 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
                         json={
 
                             "vector": xq, 
-                            "topK": 5,
+                            "topK": 8,
                             "namespace": "eng", 
                             "includeValues": True, 
                             "includeMetadata": True
@@ -518,52 +546,79 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
                     )
 
                     pinecone_response.raise_for_status()
-                    print(pinecone_response)
                     res_query = pinecone_response.json()
                 except Exception as e:
                     print(f"Fallback Pinecone query failed: {e}")
                     return
   
             # Format docs from Pinecone response
-            learn_more_text = ('\n\nLearn more at')
+            learn_more_text = ('\nLearn more at')
             docs = [{"text": f"{x['metadata']['title']}: {x['metadata']['text']}{learn_more_text}: {x['metadata'].get('source', 'N/A').replace('/en-us/', url_segment)}"}
                     for x in res_query["matches"]]
         
         except Exception as e:
             print(f"Pinecone query failed: {e}")
-            docs = "I couldn't contact my knowledge base."
+            docs = "Couldn't contact my knowledge base. Please ask the user to repeat the question."
 
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_model = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
+            reranker_main = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
+            reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
-            # Rerank docs with Cohere
-            rerank_response = await client.post(
-                "https://api.cohere.ai/v1/rerank",
-                json={
+            try:# Rerank docs with Cohere
+                rerank_response = await client.post(
+                    "https://api.cohere.ai/v1/rerank",
+                    json={
 
-                    "model": reranker_model,
-                    "query": rephrased_query, 
-                    "documents": docs, 
-                    "top_n": 2,
-                    "return_documents": True,
+                        "model": reranker_main,
+                        "query": rephrased_query, 
+                        "documents": docs, 
+                        "top_n": 2,
+                        "return_documents": True,
 
-                },
-                headers={
+                    },
+                    headers={
 
-                    "Authorization": f"Bearer {cohere_key}",
+                        "Authorization": f"Bearer {cohere_key}",
 
-                },
-                timeout=30,
-            )
-            rerank_response.raise_for_status()
-            rerank_docs = rerank_response.json()
+                    },
+                    timeout=30,
+                )
+                rerank_response.raise_for_status()
+                rerank_docs = rerank_response.json()
 
-            # Fetch all re-ranked documents
-            for result in rerank_docs['results']:
-                reranked = result['document']['text']
-                contexts.append(reranked)
+                # Fetch all re-ranked documents
+                for result in rerank_docs['results']:
+                    reranked = result['document']['text']
+                    contexts.append(reranked)
+            except Exception as e:
+                print(f'Finetuned reranker failed:{e}')
+                rerank_response = await client.post(
+                    "https://api.cohere.ai/v1/rerank",
+                    json={
+
+                        "model": reranker_backup,
+                        "query": rephrased_query, 
+                        "documents": docs, 
+                        "top_n": 2,
+                        "return_documents": True,
+
+                    },
+                    headers={
+
+                        "Authorization": f"Bearer {cohere_key}",
+
+                    },
+                    timeout=30,
+                )
+                rerank_response.raise_for_status()
+                rerank_docs = rerank_response.json()
+
+                # Fetch all re-ranked documents
+                for result in rerank_docs['results']:
+                    reranked = result['document']['text']
+                    contexts.append(reranked)
 
         except Exception as e:
             print(f"Reranking failed: {e}")
@@ -784,6 +839,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
     concise_query = extract_concise_input(user_input)
+    print(f'Original query: {user_input}')
     print(f'Concise query: {concise_query}')
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
     platform = query.platform
@@ -808,9 +864,9 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
 
         # Filter non-queries
         route_path = rl(concise_query).name
-        if route_path in ["chitchat", "agent", "niceties"]:
+        if route_path in ["chitchat", "agent", "niceties", "languages"]:
             print(f'Concise query: {concise_query} -> Route triggered: {route_path}')
-            output = ROUTER_DICTIONARY[route_path].get(locale, "Language not supported")
+            output = ROUTER_DICTIONARY[route_path].get(locale, "eng")
             return {"output": output}
 
         # Start date retrieval and reranking
