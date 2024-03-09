@@ -658,7 +658,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
 
     try:
         res = await anthropic_client.messages.create(
-            max_tokens=100,
+            max_tokens=1024,
             messages=[
                 {
                     "role": "user",
