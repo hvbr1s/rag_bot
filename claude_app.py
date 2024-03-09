@@ -57,7 +57,7 @@ openai_client = AsyncOpenAI(
 anthropic_client = AsyncAnthropic(
     
     api_key=os.environ.get("ANTHROPIC_API_KEY"),
-    timeout=30,
+    timeout=45,
 )
 
 # Initialize embedding model
@@ -671,7 +671,14 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
         )
         response = res.content
         print(response)
-        reply = response[0].text
+        answer = response[0].text
+        user_index = answer.find("\n\nUser: ")
+
+        # If "\n\nUser: " is found, cut the string up to that index
+        if user_index != -1:
+            reply = answer[:user_index]
+        else:
+            reply = answer
         print(reply)
    
     except Exception as e:
