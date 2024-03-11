@@ -562,7 +562,8 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_main = '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
+            #reranker_main = '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
+            reranker_main = '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned on March 11, 2024
             reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
             try:# Rerank docs with Cohere
