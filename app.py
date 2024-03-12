@@ -2,7 +2,6 @@ import os
 import json
 from dotenv import main
 from datetime import datetime
-from pinecone import Pinecone
 from openai import AsyncOpenAI
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
@@ -43,13 +42,6 @@ app = FastAPI()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-# index_name = 'serverless-test'
-# pc_host ="https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io"
-# pc = Pinecone(api_key=pinecone_key)
-# index = pc.Index(
-#         index_name,
-#         host=pc_host
-#     )
 
 # Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
@@ -181,6 +173,7 @@ chitchat = Route(
         "hdkfebkejb",
         "null", 
         "I have a question",
+        "[Email Masked]",
 
     ],
 )
@@ -223,7 +216,6 @@ niceties = Route(
 )
 
 languages = Route(
-
     name="languages",
     utterances=[
         "Can I input text in Russian language?",
@@ -244,7 +236,7 @@ languages = Route(
 # Initialize routes and encoder
 routes = [chitchat, agent, niceties, languages]
 encoder = OpenAIEncoder(
-    #name="text-embedding-ada-002",
+    
     name='text-embedding-3-small',
     score_threshold=0.45,
 )
@@ -265,7 +257,7 @@ ROUTER_DICTIONARY = {
         },
 
         "agent": {
-            "eng": "Hello! To speak with a human agent, please click on the 'Speak to an agent' button for assistance.",
+            "eng": "Hello! To speak with a human agent, please click the 'I have followed the instructions, still require assistance' button for further help.",
             "fr": "Bonjour! Pour parler à un agent humain, veuillez cliquer sur le bouton 'Parler à un agent' pour obtenir de l'aide.",
             "ru": "Привет! Чтобы поговорить с агентом техподдержки, пожалуйста, нажмите кнопку ‘Говорить с агентом’ для получения помощи."
         },
@@ -306,10 +298,6 @@ def filter_and_replace_crypto(user_input):
         for pattern in pattern_list:
             user_input = re.sub(pattern, replace_crypto_address, user_input, flags=re.IGNORECASE)
     return user_input
-
-# Funtion to clean bolding from Bot's response
-async def remove_double_asterisks(response):
-    return response.replace("**", "")
 
 # Function to investigate user issue
 INVESTIGATOR_PROMPT = """
@@ -437,7 +425,7 @@ async def augment_query_generated(user_input):
                     "https://api.cohere.ai/v1/chat",
                     json={
 
-                        "model": "command",
+                        "model": "command-r",
                         "message": user_input,
                         "search_queries_only": True
 
@@ -563,7 +551,8 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_main = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
+            #reranker_main = '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
+            reranker_main = '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned on March 11, 2024 
             reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
             try:# Rerank docs with Cohere
@@ -699,7 +688,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
                         json={
 
                             "message": augmented_query,
-                            "model": "command",
+                            "model": "command-r",
                             "preamble_override": primer,
                             "temperature": 0.0,
 
@@ -876,7 +865,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, rephrased_query, route_path, concise_query)
 
         #Clean response
-        cleaned_response = await remove_double_asterisks(response)            
+        cleaned_response = response.replace("**", "").replace("Manager", "Manager (now called 'My Ledger')")           
 
         # Save the response to a thread
         try:
@@ -948,7 +937,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             response = await ragchat(primer, timestamp, user_id, chat_history, locale)     
 
             #Clean response
-            cleaned_response = await remove_double_asterisks(response)
+            cleaned_response = response.replace("**", "").replace("Manager", "'My Ledger'")
 
             # Print for debugging
             print(
