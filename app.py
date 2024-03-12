@@ -664,53 +664,53 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
     except Exception as e:
         print(f"GPT4-turbo completion failed: {e}")
         try:
+            async with httpx.AsyncClient() as client: 
 
-            res = await openai_client.chat.completions.create(
-                temperature=0.0,
-                model='gpt-4',
-                messages=[
+                command_response = await client.post(
+                    
+                    "https://api.cohere.ai/v1/chat",
+                    json={
 
-                    {"role": "system", "content": primer},
-                    {"role": "user", "content": augmented_query}
+                        "message": augmented_query,
+                        "model": "command-r",
+                        "preamble_override": primer,
+                        "temperature": 0.0,
 
-                ],
-                timeout= 45.0
-            )             
-            reply = res.choices[0].message.content
+                    },
+                    headers={
+
+                        "Authorization": f"Bearer {cohere_key}"
+
+                    },
+                    timeout=30.0,
+
+                )
+            command_response.raise_for_status()
+            rep = command_response.json()
+
+            # Extract and return chat response
+            reply= rep['text']
 
         except Exception as e:
-            print(f"GPT4 completion failed: {e}")
+            print(f"Cohere completion failed: {e}")
+            try:   
+                 
+                res = await openai_client.chat.completions.create(
+                    temperature=0.0,
+                    model='gpt-4',
+                    messages=[
 
-            async with httpx.AsyncClient() as client:
-                try:       
-                    command_response = await client.post(
-                        "https://api.cohere.ai/v1/chat",
-                        json={
+                        {"role": "system", "content": primer},
+                        {"role": "user", "content": augmented_query}
 
-                            "message": augmented_query,
-                            "model": "command-r",
-                            "preamble_override": primer,
-                            "temperature": 0.0,
+                    ],
+                    timeout= 45.0
+                )             
+                reply = res.choices[0].message.content
 
-                        },
-                        headers={
-
-                            "Authorization": f"Bearer {cohere_key}"
-
-                        },
-                        timeout=30.0,
-
-                    )
-                    command_response.raise_for_status()
-                    rep = command_response.json()
-
-                    # Extract and return chat response
-                    reply= rep['text']
-                
-
-                except Exception as e:
-                    print(f"Snap! Something went wrong, please try again!")
-                    return("Snap! Something went wrong, please try again!")
+            except Exception as e:
+                print(f"Snap! Something went wrong, please try again!")
+                return("Snap! Something went wrong, please try again!")
 
     print(
                 "\n" + f"Route path: {route_path}" + "\n",
