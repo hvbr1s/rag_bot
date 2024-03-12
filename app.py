@@ -667,7 +667,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
             async with httpx.AsyncClient() as client: 
 
                 command_response = await client.post(
-                    
+
                     "https://api.cohere.ai/v1/chat",
                     json={
 
