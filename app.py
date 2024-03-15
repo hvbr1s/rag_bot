@@ -621,11 +621,29 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
                 context += context_url
                 contexts.append(context)
 
-    return contexts
+    return (contexts, docs)
 
 
 # Legacy RAG function
-async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform, rephrased_query, route_path, concise_query):
+async def rag(primer, timestamp, contexts, user_id, locale, platform, rephrased_query, route_path, concise_query, docs):
+
+    docs = docs
+    documents = []
+    for doc in docs:
+        if "\nLearn more at: " in doc['text']:
+            # Splitting the document into parts before and after "Learn more at: "
+            pre_learn_more, post_learn_more = doc['text'].split("\nLearn more at: ", 1)
+            url = post_learn_more.split()[0]
+            documents.append({
+                "title": url,
+                "snippet": pre_learn_more.strip()
+            })
+        else:
+            # If no "Learn more at: " is found, we'll leave the title empty and take the entire text as snippet.
+            documents.append({
+                "title": "",
+                "snippet": doc['text'].strip()
+            })
 
     # Choose OpenAI model depending on where the query is coming from
     llm = 'gpt-4-turbo-preview' if platform in ["slack", "discord", "web"] else 'gpt-4-turbo-preview'
@@ -675,6 +693,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
                         "model": "command-r",
                         "preamble_override": primer,
                         "temperature": 0.0,
+                        "documents": documents,
 
                     },
                     headers={
@@ -682,14 +701,18 @@ async def rag(primer, timestamp, contexts, user_id, locale, user_input, platform
                         "Authorization": f"Bearer {cohere_key}"
 
                     },
-                    timeout=30.0,
+                    timeout=35.0,
 
                 )
             command_response.raise_for_status()
             rep = command_response.json()
+            
+            # Extract URLs from respnse object and construct the reply
+            doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
+            unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
+            limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
+            reply = rep["text"] + ''.join(f"\nLearn more: {url}" for url in limited_citation_urls)
 
-            # Extract and return chat response
-            reply= rep['text']
 
         except Exception as e:
             print(f"Cohere completion failed: {e}")
@@ -859,10 +882,11 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             return {"output": output}
 
         # Start date retrieval and reranking
-        contexts = await retrieve(user_input, locale, rephrased_query, joint_query)
+        retriever = await retrieve(user_input, locale, rephrased_query, joint_query)
+        contexts, docs = retriever
 
         # Start RAG
-        response = await rag(primer, timestamp, contexts, user_id, locale, user_input, platform, rephrased_query, route_path, concise_query)
+        response = await rag(primer, timestamp, contexts, user_id, locale, platform, rephrased_query, route_path, concise_query, docs)
 
         #Clean response
         cleaned_response = response.replace("**", "").replace("Manager", "Manager (now called 'My Ledger')")           
@@ -968,6 +992,6 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": "Snap! Something went wrong, please try again!"},
         )
-
+    
 
 # Local start command: uvicorn app:app --reload --port 8800
