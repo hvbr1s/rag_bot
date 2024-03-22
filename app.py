@@ -193,6 +193,8 @@ agent = Route(
         "live chat",
         "147999 Issue",
         "Case ID 8888888",
+        "My order number is: LDG2733766",
+        "submit new ticket"
 
     ],
 )
@@ -231,6 +233,7 @@ languages = Route(
 
     ],
 )
+
 
 
 # Initialize routes and encoder
@@ -273,6 +276,7 @@ ROUTER_DICTIONARY = {
             "fr": "Bonjour! Oui je parle français. Comment puis-je vous aider aujourd'hui ? Veuillez décrire votre problème avec autant de détails que possible, y compris le modèle de votre appareil Ledger (Nano S, Nano X ou Nano S Plus), tous les messages d'erreur que vous rencontrez et le type de crypto-monnaie (par exemple, Bitcoin, Ethereum, Solana, XRP ou autre).",
             "ru": "Здравствуйте! Да, я говорю по-русски. Как я могу помочь вам сегодня? Пожалуйста, опишите свою проблему как можно подробнее, включая модель вашего устройства Ledger (Nano S, Nano X или Nano S Plus), любые сообщения об ошибках, с которыми вы столкнулись, и тип криптовалюты (например, Bitcoin, Ethereum, Solana, XRP или другую)."
         }
+
 }
 
 ######## FUNCTIONS  ##########
@@ -359,7 +363,7 @@ async def chat(chat):
                             json={
 
                                 "message": chat,
-                                "model": "command",
+                                "model": "command-r",
                                 "preamble_override": INVESTIGATOR_PROMPT,
                                 "temperature": 0.0,
 
@@ -425,7 +429,7 @@ async def augment_query_generated(user_input):
                     "https://api.cohere.ai/v1/chat",
                     json={
 
-                        "model": "command-r",
+                        "model": "command",
                         "message": user_input,
                         "search_queries_only": True
 
@@ -442,19 +446,19 @@ async def augment_query_generated(user_input):
                 reply = '\n'.join([query['text'] for query in queries['search_queries']])
         except Exception as e:
             print(f"Cohere couldn't generate an augmented query: {e}")
-            reply = ""
+            reply = user_input
 
     print(f'Rephrased query: {reply}')       
     return reply
 
           
 # Retrieve and re-rank function
-async def retrieve(user_input, locale, rephrased_query, joint_query):
+async def retrieve(user_input, locale, rephrased_query=None, joint_query=None):
     # Define context box
     contexts = []
 
-    if joint_query == '':
-        joint_query = user_input
+    joint_query = joint_query or user_input
+    rephrased_query = rephrased_query or user_input
 
     # Define a dictionary to map locales to URL segments
     locale_url_map = {
@@ -551,7 +555,6 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            #reranker_main = '496c0742-c3bc-4d67-a95b-69f0fddbf402-ft'
             reranker_main = '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned on March 11, 2024 
             reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
@@ -627,24 +630,6 @@ async def retrieve(user_input, locale, rephrased_query, joint_query):
 # Legacy RAG function
 async def rag(primer, timestamp, contexts, user_id, locale, platform, rephrased_query, route_path, concise_query, docs):
 
-    docs = docs
-    documents = []
-    for doc in docs:
-        if "\nLearn more at: " in doc['text']:
-            # Splitting the document into parts before and after "Learn more at: "
-            pre_learn_more, post_learn_more = doc['text'].split("\nLearn more at: ", 1)
-            url = post_learn_more.split()[0]
-            documents.append({
-                "title": url,
-                "snippet": pre_learn_more.strip()
-            })
-        else:
-            # If no "Learn more at: " is found, we'll leave the title empty and take the entire text as snippet.
-            documents.append({
-                "title": "",
-                "snippet": doc['text'].strip()
-            })
-
     # Choose OpenAI model depending on where the query is coming from
     llm = 'gpt-4-turbo-preview' if platform in ["slack", "discord", "web"] else 'gpt-4-turbo-preview'
 
@@ -682,43 +667,8 @@ async def rag(primer, timestamp, contexts, user_id, locale, platform, rephrased_
     except Exception as e:
         print(f"GPT4-turbo completion failed: {e}")
         try:
-            async with httpx.AsyncClient() as client: 
 
-                command_response = await client.post(
-
-                    "https://api.cohere.ai/v1/chat",
-                    json={
-
-                        "message": augmented_query,
-                        "model": "command-r",
-                        "preamble_override": primer,
-                        "temperature": 0.0,
-                        "documents": documents,
-
-                    },
-                    headers={
-
-                        "Authorization": f"Bearer {cohere_key}"
-
-                    },
-                    timeout=35.0,
-
-                )
-            command_response.raise_for_status()
-            rep = command_response.json()
-            
-            # Extract URLs from respnse object and construct the reply
-            doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
-            unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
-            limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
-            reply = rep["text"] + ''.join(f"\nLearn more: {url}" for url in limited_citation_urls)
-
-
-        except Exception as e:
-            print(f"Cohere completion failed: {e}")
-            try:   
-                 
-                res = await openai_client.chat.completions.create(
+            res = await openai_client.chat.completions.create(
                     temperature=0.0,
                     model='gpt-4',
                     messages=[
@@ -729,11 +679,63 @@ async def rag(primer, timestamp, contexts, user_id, locale, platform, rephrased_
                     ],
                     timeout= 45.0
                 )             
-                reply = res.choices[0].message.content
+            reply = res.choices[0].message.content
 
+        except Exception as e:
+            print(f"GPT4-legacy completion failed: {e}")
+            try:   
+
+                docs = docs
+                documents = []
+                for doc in docs:
+                    if "\nLearn more at: " in doc['text']:
+                        # Splitting the document into parts before and after "Learn more at: "
+                        pre_learn_more, post_learn_more = doc['text'].split("\nLearn more at: ", 1)
+                        url = post_learn_more.split()[0]
+                        documents.append({
+                            "title": url,
+                            "snippet": pre_learn_more.strip()
+                        })
+                    else:
+                        # If no "Learn more at: " is found, we'll leave the title empty and take the entire text as snippet.
+                        documents.append({
+                            "title": "",
+                            "snippet": doc['text'].strip()
+                        })
+                async with httpx.AsyncClient() as client: 
+
+                    command_response = await client.post(
+
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": "command-r",
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+                            "documents": documents,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=35.0,
+
+                    )
+                command_response.raise_for_status()
+                rep = command_response.json()
+                
+                # Extract URLs from respnse object and construct the reply
+                doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
+                unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
+                limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
+                reply = rep["text"] + '\nYou can learn more at: ' + '\n' + '\n'.join(url for url in limited_citation_urls)
+                 
             except Exception as e:
-                print(f"Snap! Something went wrong, please try again!")
-                return("Snap! Something went wrong, please try again!")
+                print(f"Cohere command-r completion failed: {e}")
+                return("Snap! Something went wrong, please ask your question again!")
 
     print(
                 "\n" + f"Route path: {route_path}" + "\n",
@@ -755,12 +757,14 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
 
         # Extract query
         function_call_query = tool_call_arguments["query"]
+        print(function_call_query)
 
         # Use this extracted query to call the retrieve function
-        retrieved_context = await retrieve(function_call_query, locale, joint_query='')
+        retrieved_context = await retrieve(function_call_query, locale)
+        contexts, docs = retrieved_context
         #retrieved_context_string = retrieved_context[0]  # This will get the first item
-        retrieved_context_string = "\n".join(retrieved_context)  # This will get all the items separated with a line break
-        if retrieved_context:
+        retrieved_context_string = "\n".join(contexts)  # This will get all the items separated with a line break
+        if contexts:
             troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context_string + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
             print(troubleshoot_instructions)
             # Make a new completion call with the retrieved context
@@ -788,7 +792,7 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
                             json={
 
                                 "message": troubleshoot_instructions,
-                                "model": "command",
+                                "model": "command-r",
                                 "preamble_override": primer,
                                 "temperature": 0.0,
 
@@ -809,7 +813,7 @@ async def ragchat(primer, timestamp, user_id, chat_history, locale):
                         
                     except Exception as e:
                         print(f"Snap! Something went wrong, please try again!")
-                        return("Snap! Something went wrong, please try again!")
+                        return("Snap! Something went wrong, please ask your question again!")
   
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = new_reply
 
