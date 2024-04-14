@@ -2,7 +2,10 @@ import os
 import cohere
 import httpx
 from openai import AsyncOpenAI
+from dotenv import main
 
+# Initialize environment variables
+main.load_dotenv()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
@@ -285,7 +288,7 @@ async def rag(primer, timestamp, contexts, locale, concise_query, docs, previous
                 command_response.raise_for_status()
                 rep = command_response.json()
                 
-                # Extract URLs from respnse object and construct the reply
+                # Extract URLs from response object and construct the reply
                 doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
                 unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
                 limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
