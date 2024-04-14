@@ -1,4 +1,4 @@
-openai==1.12.0
+openai==1.17.0
 pinecone-client==3.0.1
 python-dotenv==1.0.0
 uuid
@@ -7,13 +7,12 @@ uvicorn==0.27.0
 fastapi==0.109.1
 slowapi
 httpx==0.26.0
-git+https://github.com/casics/nostril.git
-tiktoken
+tiktoken==0.6.0
 bs4
-semantic-router
+semantic-router==0.0.20
 apscheduler
 cohere==4.44
 asyncio
-langchain
+langchain==0.1.16
 langchain_experimental 
 langchain_openai
