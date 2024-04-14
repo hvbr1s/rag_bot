@@ -163,10 +163,12 @@ def extract_concise_input(user_input):
 
         
 # RAG function
-async def rag(primer, timestamp, contexts, user_id, locale, route_path, concise_query, docs):
+async def rag(primer, timestamp, contexts, user_id, locale, concise_query, docs):
 
-    # Choose OpenAI model depending on where the query is coming from
-    llm = 'gpt-4-turbo'
+    # Prepare LLMs
+    main_llm = 'gpt-4-turbo'
+    first_backup_llm = 'gpt-4'
+    second_backup_llm = 'command-r'
 
     # Retrieve and format previous conversation history for a specific user_id
     previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
@@ -188,7 +190,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, route_path, concise_
         
         res = await openai_client.chat.completions.create(
             temperature=0.0,
-            model=llm,
+            model=main_llm,
             messages=[
 
                 {"role": "system", "content": primer},
@@ -205,7 +207,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, route_path, concise_
 
             res = await openai_client.chat.completions.create(
                     temperature=0.0,
-                    model='gpt-4',
+                    model=first_backup_llm,
                     messages=[
 
                         {"role": "system", "content": primer},
@@ -245,7 +247,7 @@ async def rag(primer, timestamp, contexts, user_id, locale, route_path, concise_
                         json={
 
                             "message": augmented_query,
-                            "model": "command-r",
+                            "model": second_backup_llm,
                             "preamble_override": primer,
                             "temperature": 0.0,
                             "documents": documents,
@@ -318,7 +320,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         contexts, docs = retriever
 
         # Start RAG
-        response = await rag(primer, timestamp, contexts, user_id, locale, route_path, concise_query, docs)
+        response = await rag(primer, timestamp, contexts, user_id, locale, concise_query, docs)
 
         #Clean response
         cleaned_response = response.replace("**", "").replace("Manager", "Manager (now called 'My Ledger')")           
