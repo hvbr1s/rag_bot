@@ -1,6 +1,6 @@
 ## How to run the bot locally for testing purposes  
 
-1. Make sure you have the correct `.env` variables: `OPENAI_API_KEY`, `BACKEND_API_KEY`, `API_KEY_NAME`, `PINECONE_API_KEY`, `PINECONE_ENVIRONMENT`
+1. Make sure you have the correct `.env` variables: `OPENAI_API_KEY`, `BACKEND_API_KEY`, `API_KEY_NAME`, `PINECONE_API_KEY`, `PINECONE_ENVIRONMENT`, `COHERE_API_KEY`.
 2. From the root folder, run `uvicorn app:app --reload --port 8800` to start a local instance of the bot 
 3. Using Postman ping the `http://127.0.0.1:8800/gpt` endpoint with a request formatted as follow:
 
