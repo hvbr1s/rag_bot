@@ -1,3 +1,7 @@
+## Intro
+
+SamBot is an AI-powered customer service bot that utilizes Retrieval-Augmented Generation (RAG) to accurately troubleshoot user issues. It is designed for high reliability and low maintenance, with the capability to handle traffic asynchronously.
+
 ## How to run the bot locally for testing purposes  
 
 1. Make sure you have the correct `.env` variables: `OPENAI_API_KEY`, `BACKEND_API_KEY`, `API_KEY_NAME`, `PINECONE_API_KEY`, `PINECONE_ENVIRONMENT`, `COHERE_API_KEY`.
