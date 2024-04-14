@@ -2,9 +2,9 @@ import os
 from dotenv import main
 from datetime import datetime
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from semantic_router.layer import RouteLayer
 from semantic_router.encoders import OpenAIEncoder
@@ -292,7 +292,6 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     user_input = filter_and_replace_crypto(query.user_input.strip())
     concise_query = extract_concise_input(user_input)
     locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
-    platform = query.platform
 
     # Loading locale-appropriate system prompt
     primer = system_prompts.get(locale, system_prompts["eng"])
