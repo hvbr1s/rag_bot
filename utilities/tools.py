@@ -186,3 +186,113 @@ async def retrieve(user_input, locale):
                 contexts.append(context)
 
     return (contexts, docs)
+
+async def rag(primer, timestamp, contexts, locale, concise_query, docs, previous_conversations):
+
+    # Prepare LLMs
+    main_llm = 'gpt-4-turbo'
+    first_backup_llm = 'gpt-4'
+    second_backup_llm = 'command-r'
+
+    # Format previous conversations
+    previous_conversation = ""
+    for conv in previous_conversations:
+        previous_conversation += f"User: {conv[0]}\nAssistant: {conv[1]}\n\n"
+    
+    # Construct the augmented query string with locale, contexts, chat history, and user input
+    if locale == 'fr':
+        augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
+    elif locale == 'ru':
+        augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + concise_query + "\"\n" + "Ассистента: " + "\n"
+    else:
+        augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
+
+    try:
+        
+        res = await openai_client.chat.completions.create(
+            temperature=0.0,
+            model=main_llm,
+            messages=[
+
+                {"role": "system", "content": primer},
+                {"role": "user", "content": augmented_query}
+
+            ],
+            timeout= 45.0
+        )             
+        reply = res.choices[0].message.content
+   
+    except Exception as e:
+        print(f"GPT4-turbo completion failed: {e}")
+        try:
+
+            res = await openai_client.chat.completions.create(
+                    temperature=0.0,
+                    model=first_backup_llm,
+                    messages=[
+
+                        {"role": "system", "content": primer},
+                        {"role": "user", "content": augmented_query}
+
+                    ],
+                    timeout= 45.0
+                )             
+            reply = res.choices[0].message.content
+
+        except Exception as e:
+            print(f"GPT4-legacy completion failed: {e}")
+            try:   
+
+                docs = docs
+                documents = []
+                for doc in docs:
+                    if "\nLearn more at: " in doc['text']:
+                        # Splitting the document into parts before and after "Learn more at: "
+                        pre_learn_more, post_learn_more = doc['text'].split("\nLearn more at: ", 1)
+                        url = post_learn_more.split()[0]
+                        documents.append({
+                            "title": url,
+                            "snippet": pre_learn_more.strip()
+                        })
+                    else:
+                        # If no "Learn more at: " is found, we'll leave the title empty and take the entire text as snippet.
+                        documents.append({
+                            "title": "",
+                            "snippet": doc['text'].strip()
+                        })
+                async with httpx.AsyncClient() as client: 
+
+                    command_response = await client.post(
+
+                        "https://api.cohere.ai/v1/chat",
+                        json={
+
+                            "message": augmented_query,
+                            "model": second_backup_llm,
+                            "preamble_override": primer,
+                            "temperature": 0.0,
+                            "documents": documents,
+
+                        },
+                        headers={
+
+                            "Authorization": f"Bearer {cohere_key}"
+
+                        },
+                        timeout=35.0,
+
+                    )
+                command_response.raise_for_status()
+                rep = command_response.json()
+                
+                # Extract URLs from respnse object and construct the reply
+                doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
+                unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
+                limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
+                reply = rep["text"] + '\nYou can learn more at: ' + '\n' + '\n'.join(url for url in limited_citation_urls)
+                 
+            except Exception as e:
+                print(f"Cohere command-r completion failed: {e}")
+                return("Snap! Something went wrong, please ask your question again!")
+
+    return reply
