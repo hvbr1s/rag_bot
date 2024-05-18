@@ -19,14 +19,18 @@ embed_model = "text-embedding-3-large"
 co = cohere.Client(os.environ["COHERE_API_KEY"])
 cohere_key = os.environ["COHERE_API_KEY"]
 
-async def retrieve(user_input, locale):
+async def retrieve(user_input, locale, rephrased_query=None, joint_query=None):
     # Define context box
     contexts = []
+
+    joint_query = joint_query or user_input
+    rephrased_query = rephrased_query or user_input
 
     # Define a dictionary to map locales to URL segments
     locale_url_map = {
         "fr": "/fr-fr/",
         "ru": "/ru/",
+        "es":"/es/"
         # add other locales as needed
     }
 
@@ -36,7 +40,7 @@ async def retrieve(user_input, locale):
     try:            
             # Call the OpenAI embedding function
             res = await openai_client.embeddings.create(
-                input=user_input, 
+                input=joint_query, 
                 model='text-embedding-3-large',
                 dimensions=3072
             )
@@ -52,7 +56,7 @@ async def retrieve(user_input, locale):
             try:
                 # Pull chunks from the serverless Pinecone instance
                 pinecone_response = await client.post(
-                    "https://serverless-test-e865e64.svc.apw5-4e34-81fa.pinecone.io/query",
+                    "https://main-e865e64.svc.aped-4627-b74a.pinecone.io/query",
                     json={
 
                         "vector": xq, 
@@ -77,10 +81,10 @@ async def retrieve(user_input, locale):
             except Exception as e:
                 print(e)
                 # Pull chunks from the legacy Pinecone fallback
-                print('Serverless response failed, falling back to legacy Pinecone')
+                print('Main database failed, calling backup!')
                 try:
                     pinecone_response = await client.post(
-                        "https://prod-e865e64.svc.northamerica-northeast1-gcp.pinecone.io/query",
+                        "https://backup-e865e64.svc.eu-west4-gcp.pinecone.io/query",
                         json={
 
                             "vector": xq, 
@@ -103,7 +107,7 @@ async def retrieve(user_input, locale):
                     pinecone_response.raise_for_status()
                     res_query = pinecone_response.json()
                 except Exception as e:
-                    print(f"Fallback Pinecone query failed: {e}")
+                    print(f"Backup database failed: {e}")
                     return
   
             # Format docs from Pinecone response
@@ -118,8 +122,9 @@ async def retrieve(user_input, locale):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_main = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned on March 11, 2024
-            reranker_backup = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else 'rerank-english-v3.0'
+            #reranker_main = '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned model trained on March 11, 2024
+            reranker_main = 'rerank-english-v3.0'
+            reranker_backup = '3453d95e-0c9b-47bf-bfad-41ec3659838c-ft' #finetuned model trained on May 2cd, 2024
 
             try:# Rerank docs with Cohere
                 rerank_response = await client.post(
@@ -127,9 +132,9 @@ async def retrieve(user_input, locale):
                     json={
 
                         "model": reranker_main,
-                        "query": user_input, 
+                        "query": rephrased_query, 
                         "documents": docs, 
-                        "top_n": 2,
+                        "top_n": 3,
                         "return_documents": True,
 
                     },
@@ -155,9 +160,9 @@ async def retrieve(user_input, locale):
                     json={
 
                         "model": reranker_backup,
-                        "query": user_input, 
+                        "query": rephrased_query, 
                         "documents": docs, 
-                        "top_n": 2,
+                        "top_n": 3,
                         "return_documents": True,
 
                     },
@@ -190,12 +195,11 @@ async def retrieve(user_input, locale):
 
     return (contexts, docs)
 
-async def rag(primer, timestamp, contexts, locale, concise_query, docs, previous_conversations):
+async def rag(primer, timestamp, contexts, locale, concise_query, previous_conversations):
 
     # Prepare LLMs
-    main_llm = 'gpt-4-turbo'
-    first_backup_llm = 'gpt-4'
-    second_backup_llm = 'command-r'
+    main_llm = 'gpt-4o'
+    first_backup_llm = 'gpt-4-turbo'
 
     # Format previous conversations
     previous_conversation = ""
@@ -207,6 +211,8 @@ async def rag(primer, timestamp, contexts, locale, concise_query, docs, previous
         augmented_query = "CONTEXTE: " + "\n\n" + "La date d'aujourdh'hui est: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIQUE DU CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Utilisateur: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
     elif locale == 'ru':
         augmented_query = "КОНТЕКСТ: " + "\n\n" + "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "ИСТОРИЯ ПЕРЕПИСКИ: \n" +  previous_conversation.strip() + "\n\n" + "Пользователь: \"" + concise_query + "\"\n" + "Ассистента: " + "\n"
+    elif locale == 'es':
+        augmented_query = "CONTEXTO: " + "\n\n" + "La fecha de hoy es: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "HISTORIAL DE CHAT: \n" +  previous_conversation.strip() + "\n\n" + "Usuario: \"" + concise_query + "\"\n" + "Asistente: " + "\n"
     else:
         augmented_query = "CONTEXT: " + "\n\n" + "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts) + "\n\n######\n\n" + "CHAT HISTORY: \n" +  previous_conversation.strip() + "\n\n" + "User: \"" + concise_query + "\"\n" + "Assistant: " + "\n"
 
@@ -244,58 +250,6 @@ async def rag(primer, timestamp, contexts, locale, concise_query, docs, previous
 
         except Exception as e:
             print(f"GPT4-legacy completion failed: {e}")
-            try:   
-
-                docs = docs
-                documents = []
-                for doc in docs:
-                    if "\nLearn more at: " in doc['text']:
-                        # Splitting the document into parts before and after "Learn more at: "
-                        pre_learn_more, post_learn_more = doc['text'].split("\nLearn more at: ", 1)
-                        url = post_learn_more.split()[0]
-                        documents.append({
-                            "title": url,
-                            "snippet": pre_learn_more.strip()
-                        })
-                    else:
-                        # If no "Learn more at: " is found, we'll leave the title empty and take the entire text as snippet.
-                        documents.append({
-                            "title": "",
-                            "snippet": doc['text'].strip()
-                        })
-                async with httpx.AsyncClient() as client: 
-
-                    command_response = await client.post(
-
-                        "https://api.cohere.ai/v1/chat",
-                        json={
-
-                            "message": augmented_query,
-                            "model": second_backup_llm,
-                            "preamble_override": primer,
-                            "temperature": 0.0,
-                            "documents": documents,
-
-                        },
-                        headers={
-
-                            "Authorization": f"Bearer {cohere_key}"
-
-                        },
-                        timeout=35.0,
-
-                    )
-                command_response.raise_for_status()
-                rep = command_response.json()
-                
-                # Extract URLs from response object and construct the reply
-                doc_id_to_url = {doc["id"]: doc["title"] for doc in rep["documents"]}
-                unique_doc_ids = {doc_id for citation in rep["citations"] for doc_id in citation["document_ids"]}
-                limited_citation_urls = [doc_id_to_url[doc_id] for doc_id in list(unique_doc_ids)[:2]] # only grab 2 urls
-                reply = rep["text"] + '\nYou can learn more at: ' + '\n' + '\n'.join(url for url in limited_citation_urls)
-                 
-            except Exception as e:
-                print(f"Cohere command-r completion failed: {e}")
-                return("Snap! Something went wrong, please ask your question again!")
+            return("Snap! Something went wrong, please ask your question again!")
 
     return reply
