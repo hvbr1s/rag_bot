@@ -1,5 +1,12 @@
 import os
+import re
+import time
+import cohere
+import asyncio
 from dotenv import main
+from crewai import Crew, Process
+from crew.agents import researcher
+from crew.tasks import search_docs
 from datetime import datetime
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -8,14 +15,11 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from semantic_router.layer import RouteLayer
 from semantic_router.encoders import OpenAIEncoder
-from utilities.system_prompts import SYSTEM_PROMPT_eng, SYSTEM_PROMPT_fr, SYSTEM_PROMPT_ru
-from utilities.semantic_routes import chitchat, agent, niceties, languages, phone, ROUTER_DICTIONARY
+from utilities.system_prompts import SYSTEM_PROMPT_eng, SYSTEM_PROMPT_fr, SYSTEM_PROMPT_ru, SYSTEM_PROMPT_es
+from routes.semantic_routes import chitchat, human, niceties, languages, phone, ROUTER_DICTIONARY
 from utilities.pii_filters import patterns
 from utilities.tools import retrieve, rag
-import re
-import time
-import cohere
-import asyncio
+from utilities.rephraser import rephrase
 
 # Initialize environment variables
 main.load_dotenv()
@@ -39,6 +43,20 @@ class Query(BaseModel):
 
 # Define FastAPI app
 app = FastAPI()
+
+# Ready the crew
+crew = Crew(
+  agents=[researcher],
+  tasks=[search_docs],
+  process=Process.sequential,
+  verbose= 1,
+)
+
+# Agent handling function
+async def agent(task):
+    print(f"Processing task-> {task}")
+    response = crew.kickoff(inputs={"topic": task})
+    return response
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
@@ -88,11 +106,12 @@ async def cleanup_expired_states():
 ######## LOCALIZATION ##########
 
 # Define supported locales for data retrieval
-SUPPORTED_LOCALES = {'eng', 'fr', 'ru'}
+SUPPORTED_LOCALES = {'eng', 'fr', 'ru', 'es'}
 LOCALE_TO_PROMPT_MAP = {
     'eng': SYSTEM_PROMPT_eng,
     'fr': SYSTEM_PROMPT_fr,
-    'ru': SYSTEM_PROMPT_ru
+    'ru': SYSTEM_PROMPT_ru,
+    'es': SYSTEM_PROMPT_es
 }
 
 # Load localized prompt
@@ -108,22 +127,21 @@ system_prompts = {locale: load_sysprompt(locale) for locale in SUPPORTED_LOCALES
 # Translations dictionary
 translations = {
     'ru': '\n\nУзнайте больше на',
-    'fr': '\n\nPour en savoir plus'
+    'fr': '\n\nPour en savoir plus',
+    'es': '\n\nPara aprender más'
 }
 
 ########   SEMANTIC ROUTING  ##########
 
 # Initialize routes and encoder
-routes = [chitchat, agent, niceties, languages, phone]
+routes = [chitchat, human, niceties, languages, phone]
 encoder = OpenAIEncoder(
     name='text-embedding-3-small',
     score_threshold=0.45,
 )
 rl = RouteLayer(
-
     encoder=encoder, 
     routes=routes,
-    
 )  
 
 ######## FUNCTIONS  ##########
@@ -178,7 +196,7 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
     user_id = query.user_id
     user_input = filter_and_replace_crypto(query.user_input.strip())
     concise_query = extract_concise_input(user_input)
-    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng"
+    locale = query.user_locale if query.user_locale in SUPPORTED_LOCALES else "eng" # if locale is not supported or not provided, default to 'eng'
 
     # Loading locale-appropriate system prompt
     primer = system_prompts.get(locale, system_prompts["eng"])
@@ -194,38 +212,37 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         # Set clock
         timestamp = datetime.now().strftime("%B %d, %Y")
 
+        # Prepare enriched user query
+        rephrased_query = await rephrase(user_input, locale)
+
         # Filter non-queries
         route_path = rl(concise_query).name
-        if route_path in ["chitchat", "agent", "niceties", "languages", "phone"]:
+        if route_path in ["chitchat", "human", "niceties", "languages", "phone"]:
             print(f'Concise query: {concise_query} -> Route triggered: {route_path}')
             output = ROUTER_DICTIONARY[route_path].get(locale, "eng")
             return {"output": output}
 
         # Start date retrieval and reranking
-        retriever = await retrieve(user_input, locale)
-        contexts, docs = retriever
+        # retriever = await retrieve(user_input, locale, rephrased_query, joint_query)
+        contexts = await agent(rephrased_query)
 
         # Retrieve and format previous conversation history for a specific user_id
         previous_conversations = USER_STATES[user_id].get('previous_queries', [])[-1:]  # Get the last -N conversations
 
         # Start RAG
-        response = await rag(primer, timestamp, contexts, locale, concise_query, docs, previous_conversations)
+        response = await rag(primer, timestamp, contexts, locale, concise_query, previous_conversations)
 
         #Clean response
         cleaned_response = response.replace("**", "").replace("Manager", "Manager (now called 'My Ledger')")           
-     
-        #Verbose logging
-        titles = []
-        for doc in docs[:2]: 
-                title = doc["text"].split(":")[0]
-                titles.append(title)
         
         log_entry = f"""
 ----------------{f"User ID: {user_id}"}----------------
 Full query: {query}
+Locale: {locale}
 Route: {route_path}
-Concise query: {user_input}
-Docs: {titles}
+Concise query: {concise_query}
+Rephrased query: {rephrased_query}
+Docs: {contexts}
 Chat history: {previous_conversations}
 Final Output: {cleaned_response}
 ---------------------------------------
