@@ -1,13 +1,10 @@
 
+import os
 from crewai import Agent
 from crew.tool import retriever_tool
-from langchain_openai import ChatOpenAI
 from langchain.agents import load_tools
 
-gpt_llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0.0
-)
+os.environ["OPENAI_MODEL_NAME"]="gpt-4o"
 
 # Creating a senior researcher agent with memory and verbose mode
 researcher = Agent(
@@ -23,7 +20,6 @@ researcher = Agent(
   ),
   tools=[retriever_tool],
   allow_delegation=False,
-  llm=gpt_llm,
   max_iter=5
 )
 

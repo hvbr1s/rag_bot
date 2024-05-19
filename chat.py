@@ -1,6 +1,6 @@
 import os
 from dotenv import main
-from system.prompts import INVESTIGATOR_PROMPT, SALES_ASSISTANT_PROMPT
+from utilities.system_prompts import INVESTIGATOR_PROMPT, SALES_ASSISTANT_PROMPT
 from tools.retrieve_tool import simple_retrieve
 from tools.function_tool import TOOLS
 from fastapi.security import APIKeyHeader
@@ -219,3 +219,6 @@ app.mount("/static", StaticFiles(directory="static"), name="./static/BBALP00A.TT
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+# uvicorn chat:app --reload --port 8800

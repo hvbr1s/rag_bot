@@ -13,10 +13,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from semantic_router.layer import RouteLayer
-from semantic_router.encoders import OpenAIEncoder
 from utilities.system_prompts import SYSTEM_PROMPT_eng, SYSTEM_PROMPT_fr, SYSTEM_PROMPT_ru, SYSTEM_PROMPT_es
-from routes.semantic_routes import chitchat, human, niceties, languages, phone, ROUTER_DICTIONARY
 from utilities.pii_filters import patterns
 from utilities.tools import retrieve, rag
 from utilities.rephraser import rephrase
@@ -131,19 +128,6 @@ translations = {
     'es': '\n\nPara aprender más'
 }
 
-########   SEMANTIC ROUTING  ##########
-
-# Initialize routes and encoder
-routes = [chitchat, human, niceties, languages, phone]
-encoder = OpenAIEncoder(
-    name='text-embedding-3-small',
-    score_threshold=0.45,
-)
-rl = RouteLayer(
-    encoder=encoder, 
-    routes=routes,
-)  
-
 ######## FUNCTIONS  ##########
 
 # Function to replace crypto addresses
@@ -215,13 +199,6 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
         # Prepare enriched user query
         rephrased_query = await rephrase(user_input, locale)
 
-        # Filter non-queries
-        route_path = rl(concise_query).name
-        if route_path in ["chitchat", "human", "niceties", "languages", "phone"]:
-            print(f'Concise query: {concise_query} -> Route triggered: {route_path}')
-            output = ROUTER_DICTIONARY[route_path].get(locale, "eng")
-            return {"output": output}
-
         # Start date retrieval and reranking
         # retriever = await retrieve(user_input, locale, rephrased_query, joint_query)
         contexts = await agent(rephrased_query)
@@ -239,7 +216,6 @@ async def react_description(query: Query, api_key: str = Depends(get_api_key)):
 ----------------{f"User ID: {user_id}"}----------------
 Full query: {query}
 Locale: {locale}
-Route: {route_path}
 Concise query: {concise_query}
 Rephrased query: {rephrased_query}
 Docs: {contexts}
