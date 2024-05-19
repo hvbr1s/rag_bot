@@ -1,3 +1,7 @@
+## Demo
+
+[![Watch the video](https://img.youtube.com/vi/7H0ideySlVk/maxresdefault.jpg)](https://youtu.be/7H0ideySlVk)
+
 ## Intro
 
 SamBot is an AI-powered customer service bot that utilizes Retrieval-Augmented Generation (RAG) to accurately troubleshoot user issues. It is designed for high reliability and low maintenance, with the capability to handle traffic asynchronously.
