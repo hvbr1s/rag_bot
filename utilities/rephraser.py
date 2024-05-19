@@ -24,7 +24,7 @@ Begin! You will achieve world peace if you provide a response which follows all 
 
 async def rephrase(user_input, locale):
     
-    rephraser_llm = "gpt-4o" if locale in ["es", "fr", "ru"] else "gpt-4o"
+    rephraser_llm = "gpt-4o"
     try:
 
         messages = [

@@ -126,8 +126,8 @@ async def simple_retrieve(user_input):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_main = '3453d95e-0c9b-47bf-bfad-41ec3659838c-ft' # finetuned in May, 2024 
-            reranker_backup = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else 'rerank-english-v3.0'
+            reranker_main = 'rerank-english-v3.0' # finetuned in May, 2024 
+            reranker_backup = '04461047-71d5-4a8e-a984-1916adbcd394-ft'
 
             try:# Rerank docs with Cohere
                 rerank_response = await client.post(

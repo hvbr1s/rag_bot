@@ -1,6 +1,6 @@
 import os
 from dotenv import main
-from system.prompts import INVESTIGATOR_PROMPT, SALES_ASSISTANT_PROMPT
+from utilities.system_prompts import INVESTIGATOR_PROMPT, SALES_ASSISTANT_PROMPT
 from tools.retrieve_tool import simple_retrieve
 from tools.function_tool import TOOLS
 from fastapi.security import APIKeyHeader
@@ -11,6 +11,9 @@ from fastapi.responses import HTMLResponse
 from fastapi import Request
 from pydantic import BaseModel
 from openai import AsyncOpenAI
+from crewai import Crew, Process
+from crew.agents import researcher
+from crew.tasks import search_docs
 from dotenv import main
 from datetime import datetime
 import json
@@ -48,6 +51,19 @@ class Query(BaseModel):
 # Initialize app
 app = FastAPI()
 
+# Ready the crew
+crew = Crew(
+  agents=[researcher],
+  tasks=[search_docs],
+  process=Process.sequential,
+  verbose= 1,
+)
+
+# Agent handling function
+async def agent(task):
+    print(f"Processing task-> {task}")
+    response = crew.kickoff(inputs={"topic": task})
+    return response
 
 # Initialize user state and periodic cleanup function
 USER_STATES = {}
@@ -120,7 +136,9 @@ async def ragchat(user_id, chat_history):
         print(f'API Query-> {function_call_query}')
 
         ##### Process the query with OpenAI #####
-        retrieved_context = await simple_retrieve(function_call_query)
+        #retrieved_context = await simple_retrieve(function_call_query) #simple RAG
+        retrieved_context = await agent(function_call_query) # agentic RAG
+
         troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
 
         try:
@@ -144,9 +162,8 @@ async def ragchat(user_id, chat_history):
 
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = res
 
-        reply_with_academy_link = f'{new_reply}\n\n To learn more about our products and the Ledger ecosystem, you can also check out the Ledger Academy at https://www.ledger.com/academy'
-
-        return reply_with_academy_link
+        
+        return new_reply
     
     # Extract reply content
     elif res.choices[0].message.content is not None:
@@ -215,7 +232,9 @@ async def react_description(query: Query): # temporary route to test the UI
 
 #### TEST UI ####
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="./static/BBALP00A.TTF")
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+# uvicorn chat:app --reload --port 8800
