@@ -6,7 +6,6 @@ from tools.function_tool import TOOLS
 from fastapi.security import APIKeyHeader
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi import Request
 from pydantic import BaseModel
@@ -178,14 +177,12 @@ async def health_check():
 
 # RAGChat route
 @app.post('/agent') 
-# async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
+#async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
 async def react_description(query: Query): # temporary route to test the UI 
 
     # Deconstruct incoming query
     user_id = query.user_id
     user_input = query.user_input.strip()
-    # locale = query.locale if query.locale else "eng"
-    # print(f'Locale-> {locale}')
 
     # Create a conversation history for new users
     convo_start = time.time()

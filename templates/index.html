@@ -1,123 +1,76 @@
 <!DOCTYPE html>
 <html>
-<head>    
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <title>LedgerBot</title>
     <style>
-
         body {
-            background-repeat: no-repeat;
-            background-size: cover;
+            background-color: #1E1E1E;
+            color: #E5E5E5;
+            font-family: 'Inter', sans-serif;
             display: flex;
             flex-direction: column;
-            font-family: "Open Sans", sans-serif;
-            background-color: rgb(0, 0, 0);
-            color: white;
             padding: 12px;
-            --text-font-family: 'Inter', sans-serif;
-            --heading-font-family: 'HM Alpha Mono', sans-serif;    
-        } 
+            margin: 0;
+            min-height: 100vh;
+        }
 
         h1 {
-            font-family: var(--heading-font-family);
-            }
-
-        button {
-            display: flex;
-            text-align: center;
-            background: rgb(210, 207, 210);
-            color: rgb(7, 7, 7);
-            cursor: pointer;
-            border: 2px solid rgb(7, 7, 7);
-            border-radius: 5px;
-            padding: 8px 16px;
-            box-shadow: 2px 2px 0 0 black,
-            4px 4px 0 0 white;
-            transition-duration: 200ms;
             font-family: 'Press Start 2P', cursive;
+            color: #00FF7F;
+            text-align: center;
             margin-bottom: 16px;
-            margin-top: 8px;
         }
 
-            button:hover {
-            box-shadow: 3px 3px black, 6px 6px 0 0 white;
-            transform: translate(-2px, 2px);
+        form {
+            margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
         }
 
-            form {
-                margin-top: 16px;
-            }
-
-            input[type="text"] {
-            background-color: #444;
-            color: rgb(231, 224, 224);
-            border: none;
-            padding: 8px;
-            border-radius: 4px;
-        }
-
-            input[type="text"]:focus {
-            outline: none;
-        }
-
-            label {
+        label {
             display: block;
             margin-bottom: 8px;
+            font-size: 1.2em;
+            color: #E5E5E5;
         }
 
         input[type="text"] {
-            background-color: #9f9c9c;
-            color:black;
-            border: none;
-            padding: 8px;
-            border-radius: 4px;
-            width: 25%;
-            height: 100px;
-            margin-bottom: 8px;
-            margin-top: 8px;
-        }
-
-
-        .response {
-            background-color: rgb(232, 213, 236);
-            color: rgb(0, 0, 0);
-            border: none;
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 16px;
-            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
-            min-height: 30px;
-            overflow-wrap: break-word;
-        }
-
-
-            #submit-btn {
-            display: flex;
-            text-align: center;
-            background: rgb(210, 207, 210);
-            color: rgb(7, 7, 7);
-            cursor: pointer;
-            border: 2px solid rgb(7, 7, 7);
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #333;
             border-radius: 5px;
-            padding: 8px 16px;
-            box-shadow: 2px 2px 0 0 black,
-            4px 4px 0 0 white;
-            transition-duration: 200ms;
-            font-family: 'Press Start 2P', cursive;
-            margin-bottom: 8px;
-            margin-top: 8px;
+            background-color: #333;
+            color: #E5E5E5;
+            font-size: 1em;
         }
 
-            #submit-btn:hover {
-            box-shadow: 3px 3px black, 6px 6px 0 0 white;
-            transform: translate(-2px, 2px);
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #00FF7F;
+        }
+
+        #submit-btn {
+            background-color: #00FF7F;
+            color: #1E1E1E;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-family: 'Press Start 2P', cursive;
         }
 
         #submit-btn:disabled {
-            background: grey; 
+            background-color: grey;
+        }
+
+        #submit-btn:hover:not(:disabled) {
+            background-color: #00cc66;
         }
 
         .response-container {
@@ -125,25 +78,24 @@
             margin-bottom: 16px;
         }
 
-
-
-        .user-input {
-            background-color: #9f9c9c;
-            color: black;
-            padding: 8px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
-            min-height: 30px;
-            overflow-wrap: break-word;
-            margin-top: 8px;
+        .user-input, .response {
+            background-color: #2A2A2A;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            word-wrap: break-word;
+            font-family: 'Inter', sans-serif;
         }
 
+        .response {
+            background-color: #3A3A3A;
+        }
 
         .loading {
-
-                margin-top: 8px
-
+            display: none;
+            margin-top: 8px;
+            text-align: center;
+            font-size: 1.2em;
         }
 
         .conversation-wrapper {
@@ -154,22 +106,21 @@
             z-index: 1;
         }
 
-
         #conversation-container {
             max-width: 800px;
             margin: 0 auto;
             overflow-y: auto;
+            width: 100%;
         }
 
         a {
-            color: white;
-            cursor: pointer;
+            color: #00FF7F;
+            text-decoration: none;
         }
 
-        .response a {
-            color: rgb(49, 38, 25);
+        a:hover {
+            text-decoration: underline;
         }
-
 
         @keyframes typewriter {
             from {
@@ -187,74 +138,55 @@
         }
 
         p {
-            font-family: var(--text-font-family);
+            font-family: 'Inter', sans-serif;
         }
 
-        /* Mobile phones (landscape) and smaller */
         @media (max-width: 640px) {
-          input[type="text"] {
-            width: 75%; /* or whatever width you prefer */
-          }
+            input[type="text"] {
+                width: 100%;
+            }
         }
-        
-        /* Tablets and smaller */
+
         @media (max-width: 768px) {
-          input[type="text"] {
-            width: 75%; /* or whatever width you prefer */
-          }
+            input[type="text"] {
+                width: 100%;
+            }
         }
-        
-        /* Smaller desktop screens and smaller */
+
         @media (max-width: 1024px) {
-          input[type="text"] {
-            width: 35%; /* or whatever width you prefer */
-          }
+            input[type="text"] {
+                width: 100%;
+            }
         }
-        
-        /* Larger desktop screens */
-        @media (min-width: 1025px) {
-          input[type="text"] {
-            width: 25%; /* this is your current width */
-          }
-        }
-
     </style>
-     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
-<body style="background-color: white; color: black; padding: 12px; font-family: 'Press Start 2P', cursive;">
-
-    <h1>SamBot😊</h1>
+<body>
+    <h1>SamBot</h1>
     <div class="conversation-wrapper">
         <div id="conversation-container"></div>
     </div>
     <form>
-        <label for="input"><p><b>How can I help you today?</b></p></label>
+        <label for="input">🤖 How can I help you today?</label>
         <input type="text" name="input" id="input">
-        <div id="warning" style="display:none;color:red;margin-top: 8px; margin-bottom: 8px; font-size: small;">&#9888;&#65039;Please remove email/street addresses.</div>
+        <div id="warning" style="display:none;color:red;margin-top: 8px; margin-bottom: 8px; font-size: small;">⚠️ Please remove email/street addresses.</div>
         <input type="submit" value="Submit" id="submit-btn">
     </form>
-    
-
-    <div class="loading" style="display:none;"><p><b>Thinking...&#129300;</b></p></div>
-
-
+    <div class="loading"><p><b>Thinking... 🤔</b></p></div>
     <section id="try-again">
-        <a href="https://retailbot.staging.aws.ledger.fr/">
-            <button class="try-button">New chat</button>
+        <a href="http://127.0.0.1:8800/agent">
         </a>
     </section>
 </body>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
 <script>
-
-    const fithEle = document.getElementById('try-again')
-    fithEle.style.display = 'none'
+    const fithEle = document.getElementById('try-again');
+    fithEle.style.display = 'none';
 
     $(document).ready(function() {
         var emailRegex = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
-        var addressRegex = /\d+ [\w\s]{1,20}(street|st|drive|dr|avenue|ave|road|rd|rue|boulevard|avenue|chemin)\.?/i;
+        var addressRegex = /\d+ [\\w\\s]{1,20}(street|st|drive|dr|avenue|ave|road|rd|rue|boulevard|avenue|chemin)\\.?/i;
         var warningDiv = document.getElementById('warning');
         var submitBtn = document.getElementById('submit-btn');
 
@@ -269,7 +201,6 @@
         });
     });
 
- 
     function makeLinksClickable(text) {
         var urlPattern = /((https?:\/\/)|(www\.))[^<\s]+/ig;
         return text.replace(urlPattern, function(match) {
@@ -281,7 +212,6 @@
             return '<a href="' + prefix + cleanedUrl + '" target="_blank">' + cleanedUrl + '</a>';
         });
     }
-
 
     function cleanUrlPatterns(url) {
         var patterns = [
@@ -300,19 +230,17 @@
             /\.$/
         ];
 
-        patterns.forEach(function (pattern) {
+        patterns.forEach(function(pattern) {
             url = url.replace(pattern, '');
         });
 
         return url;
     }
 
-
     function scrollToBottom() {
         var conversationContainer = document.getElementById('conversation-container');
         conversationContainer.scrollTop = conversationContainer.scrollHeight;
     }
-
 
     function typewriterEffect(chatbot_output, response_div, callback) {
         let i = 0;
@@ -351,12 +279,11 @@
     function makeLinksOpenInNewTab(input) {
         var dom = new DOMParser().parseFromString(input, 'text/html');
         var links = dom.getElementsByTagName('a');
-        for(var i=0; i<links.length; i++) {
+        for (var i = 0; i < links.length; i++) {
             links[i].setAttribute('target', '_blank');
         }
         return dom.body.innerHTML;
     }
-
 
     function updateConversation(user_input, chatbot_output) {
         var response_container = document.createElement("div");
@@ -376,7 +303,6 @@
         typewriterEffect(chatbot_output, response_div, scrollToBottom);
     }
 
-
     function updateUrls(text) {
         var urlPattern = /((https?:\/\/)|(www\.))[^\s]+/ig;
         return text.replace(urlPattern, function(match) {
@@ -386,48 +312,50 @@
         });
     }
 
-
     $(function() {
-    const userId = uuid.v4(); // Generate a UUID for the user
-    localStorage.setItem('user_id', userId); // Store the user_id for future use
-    $('form').submit(function(event) {
-      event.preventDefault();
-      const inputText = $('#input').val();
-      $('.loading').show();
-      $('#submit-btn').prop('disabled', true);
+        const userId = uuid.v4(); // Generate a UUID for the user
+        localStorage.setItem('user_id', userId); // Store the user_id for future use
+        $('form').submit(function(event) {
+            event.preventDefault();
+            const inputText = $('#input').val();
+            $('.loading').show();
+            $('#submit-btn').prop('disabled', true);
 
-      $.ajax({
-        type: 'POST',
-        //url: 'https://retailbot.staging.aws.ledger.fr/agent', // production route
-        url: 'http://127.0.0.1:8800/agent', // for local testing
-        data: JSON.stringify({
-          user_input: inputText,
-          user_id: userId,
-          locale: "eng",
-          platform: "web"
-        }),
-        contentType: 'application/json',
-        success: function(response) {
-          $('.loading').hide();
-          const showdownConverter = new showdown.Converter({simpleLineBreaks: true, excludeTrailingPunctuationFromURLs: true, smartIndentationFix: true});
-          let chatbotOutput = showdownConverter.makeHtml(response.output);
+            $.ajax({
+                type: 'POST',
+                url: 'http://127.0.0.1:8800/agent', // for local testing
+                data: JSON.stringify({
+                    user_input: inputText,
+                    user_id: userId,
+                    locale: "eng",
+                    platform: "web"
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    $('.loading').hide();
+                    const showdownConverter = new showdown.Converter({
+                        simpleLineBreaks: true,
+                        excludeTrailingPunctuationFromURLs: true,
+                        smartIndentationFix: true
+                    });
+                    let chatbotOutput = showdownConverter.makeHtml(response.output);
 
-          chatbotOutput = makeLinksClickable(makeLinksOpenInNewTab(chatbotOutput));
-          updateConversation(inputText, chatbotOutput);
-          $('#input').val('');
-        },
-        error: function(jqXHR, textStatus, errorThrown) {
-          $('.loading').hide();
-          const errorResponse = JSON.parse(jqXHR.responseText);
-          alert(errorResponse.detail || 'An error occurred while processing your request.');
-        },
-        complete: function() {
-          $('#submit-btn').prop('disabled', false);
-        }
-      });
+                    chatbotOutput = makeLinksClickable(makeLinksOpenInNewTab(chatbotOutput));
+                    updateConversation(inputText, chatbotOutput);
+                    $('#input').val('');
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    $('.loading').hide();
+                    const errorResponse = JSON.parse(jqXHR.responseText);
+                    alert(errorResponse.detail || 'An error occurred while processing your request.');
+                },
+                complete: function() {
+                    $('#submit-btn').prop('disabled', false);
+                }
+            });
+        });
     });
-  });
 
-    fithEle.style.display = 'flex'
+    fithEle.style.display = 'flex';
 </script>
 </html>
