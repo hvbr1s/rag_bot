@@ -7,7 +7,7 @@ uvicorn==0.27.0
 fastapi==0.109.1
 slowapi
 httpx==0.26.0
-tiktoken
+tiktoken==0.5.2
 bs4
 apscheduler
 cohere==5.5.0
@@ -17,3 +17,4 @@ langchain_experimental==0.0.58
 langchain_community==0.0.38
 crewai==0.30.11
 crewai_tools==0.2.6
+jinja2
