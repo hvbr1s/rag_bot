@@ -159,7 +159,7 @@ async def ragchat(user_id, chat_history):
                 print(f"OpenAI completion failed: {e}")
                 return("Snap! Something went wrong, please ask your question again!")
 
-        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = res
+        USER_STATES[user_id]['previous_queries'][-1]['assistant'] = res.choices[0].message.content
 
         
         return new_reply
