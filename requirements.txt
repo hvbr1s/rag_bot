@@ -18,3 +18,5 @@ langchain_community==0.0.38
 crewai==0.30.11
 crewai_tools==0.2.6
 jinja2
+sounddevice
+wavio
