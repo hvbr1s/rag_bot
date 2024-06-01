@@ -1,30 +1,41 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import sounddevice as sd
-from dotenv import main
+print(sd.query_devices())
+from dotenv import load_dotenv
 from pydantic import BaseModel
 import wavio
-import requests
-import time
+import numpy as np
 import os
-import logging
 import aiohttp
 import asyncio
 
 # Initialize environment variables
-main.load_dotenv()
+load_dotenv()
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Adjust this as needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class RecordRequest(BaseModel):
     duration: float
 
-GLADIA_KEY = os.environ['GLADIA_KEY'] 
-print(f'Gladia key -> {GLADIA_KEY}')
+GLADIA_KEY = os.environ['GLADIA_KEY']
 
-def record_audio(duration, samplerate):
+device_index = 4  # Your C922 Pro Stream Webcam index
+device_info = sd.query_devices(device_index, 'input')
+samplerate = int(device_info['default_samplerate'])
+file_path = "./voice/output.wav"
+
+def record_audio(duration, samplerate, device):
     print("Recording...")
-    audio_data = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=2, dtype='int16')
+    audio_data = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=2, dtype='int16', device=device)
     sd.wait()
     print("Recording finished")
     return audio_data
@@ -102,14 +113,23 @@ async def root():
     with open("static/index.html", 'r') as f:
         return HTMLResponse(content=f.read())
 
-@app.post("/sound")
-async def record_and_process_sound(record_request: RecordRequest):
+@app.post("/start")
+async def start_recording():
+    global audio_data
+    duration = 20  # Set a maximum duration
+    audio_data = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=2, dtype='int16', device=device_index)
+    print("Recording started")
+    return {"status": "recording started"}
+
+@app.post("/stop")
+async def stop_recording(record_request: RecordRequest):
+    global audio_data
+    sd.stop()
+    print("Recording stopped")
     duration = record_request.duration  # seconds
-    samplerate = 44100  # Hz
-    file_path = "output.wav"
+    print(f"Received duration: {duration} seconds")
     
-    # Record audio
-    audio_data = record_audio(duration, samplerate)
+    # Save audio data
     save_wav(file_path, audio_data, samplerate)
     
     # Upload audio and get transcription
@@ -120,9 +140,16 @@ async def record_and_process_sound(record_request: RecordRequest):
         raise ValueError("Audio URL is missing in the upload response.")
     
     transcription = await get_transcription(audio_url)
+    print(transcription)
     
     # Post transcription to another API
     result = await post_transcription(transcription)
-    return result
-
-# To run the app, use: uvicorn sound:app --reload --port 8880
+    print(f'Server answer ----->>>> {result}')
+    ans = result["output"]
+    print(ans)
+    
+    # Delete the audio file
+    os.remove(file_path)
+    print(f"Deleted file {file_path}")
+    
+    return {"question": transcription, "reply": ans}
