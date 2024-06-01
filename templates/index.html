@@ -407,8 +407,8 @@
             const question = data.question || 'No question returned';
             const reply = data.reply || 'No reply returned';
     
-            updateConversation(question); // Update the conversation with the question
-            updateConversation(reply); // Update the conversation with the reply
+            updateConversation(question, reply); // Update the conversation with the question
+            
         })
         .catch(error => {
             console.error('Error stopping recording:', error);
