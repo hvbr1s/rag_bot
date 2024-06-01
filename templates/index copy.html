@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>SamBot</title>
+    <style>
+        body {
+            background-color: #1E1E1E;
+            color: #E5E5E5;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            color: #00FF7F;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        form {
+            margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.2em;
+            color: #E5E5E5;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background-color: #333;
+            color: #E5E5E5;
+            font-size: 1em;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #00FF7F;
+        }
+
+        #submit-btn {
+            background-color: #00FF7F;
+            color: #1E1E1E;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-family: 'Press Start 2P', cursive;
+        }
+
+        #submit-btn:disabled {
+            background-color: grey;
+        }
+
+        #submit-btn:hover:not(:disabled) {
+            background-color: #00cc66;
+        }
+
+        .response-container {
+            margin-top: 16px;
+            margin-bottom: 16px;
+        }
+
+        .user-input, .response {
+            background-color: #2A2A2A;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            word-wrap: break-word;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .response {
+            background-color: #3A3A3A;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 8px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .conversation-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        #conversation-container {
+            max-width: 800px;
+            margin: 0 auto;
+            overflow-y: auto;
+            width: 100%;
+        }
+
+        a {
+            color: #00FF7F;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @keyframes typewriter {
+            from {
+                width: 0;
+            }
+            to {
+                width: 100%;
+            }
+        }
+
+        .typewriter {
+            overflow: hidden;
+            white-space: nowrap;
+            animation: typewriter 1s steps(50, end) forwards;
+        }
+
+        p {
+            font-family: 'Inter', sans-serif;
+        }
+
+        @media (max-width: 640px) {
+            input[type="text"] {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            input[type="text"] {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            input[type="text"] {
+                width: 100%;
+            }
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>SamBot</h1>
+    <div class="conversation-wrapper">
+        <div id="conversation-container"></div>
+    </div>
+    <form>
+        <label for="input">🤖 How can I help you today?</label>
+        <input type="text" name="input" id="input">
+        <div id="warning" style="display:none;color:red;margin-top: 8px; margin-bottom: 8px; font-size: small;">⚠️ Please remove email/street addresses.</div>
+        <input type="submit" value="Submit" id="submit-btn">
+    </form>
+    <div class="loading"><p><b>Thinking... 🤔</b></p></div>
+    <section id="try-again">
+        <a href="http://127.0.0.1:8800/agent">
+        </a>
+    </section>
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
+<script>
+    const fithEle = document.getElementById('try-again');
+    fithEle.style.display = 'none';
+
+    $(document).ready(function() {
+        var emailRegex = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+        var addressRegex = /\d+ [\\w\\s]{1,20}(street|st|drive|dr|avenue|ave|road|rd|rue|boulevard|avenue|chemin)\\.?/i;
+        var warningDiv = document.getElementById('warning');
+        var submitBtn = document.getElementById('submit-btn');
+
+        document.getElementById('input').addEventListener('input', function(e) {
+            if (emailRegex.test(e.target.value) || addressRegex.test(e.target.value)) {
+                warningDiv.style.display = 'block';
+                submitBtn.disabled = true;
+            } else {
+                warningDiv.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        });
+    });
+
+    function makeLinksClickable(text) {
+        var urlPattern = /((https?:\/\/)|(www\.))[^<\s]+/ig;
+        return text.replace(urlPattern, function(match) {
+            if (match.slice(-1) === '.') {
+                match = match.slice(0, -1);
+            }
+            var cleanedUrl = cleanUrlPatterns(match);
+            var prefix = /^https?:\/\//.test(cleanedUrl) ? '' : 'http://';
+            return '<a href="' + prefix + cleanedUrl + '" target="_blank">' + cleanedUrl + '</a>';
+        });
+    }
+
+    function cleanUrlPatterns(url) {
+        var patterns = [
+            /(%3C\/p%3E|<\/p>|<\/li>|<\/p><\/li>|\.<\/p><\/li>|<\/p><\/li>\?docs=true|<\/p>\?docs=true)\?docs=true/g,
+            /\.?support=true/g,
+            /(\.)(\?docs=true)/g,
+            /(\.)(\?support=true)/g,
+            /(%3C(\/?[a-z]+)[^%]*%3E)/ig,
+            /<\/p><\/li>/g,
+            /<\/p>/g,
+            /<\/li>/g,
+            /<\p>/g,
+            /<\li>/g,
+            /<p>/g,
+            /<li>/g,
+            /\.$/
+        ];
+
+        patterns.forEach(function(pattern) {
+            url = url.replace(pattern, '');
+        });
+
+        return url;
+    }
+
+    function scrollToBottom() {
+        var conversationContainer = document.getElementById('conversation-container');
+        conversationContainer.scrollTop = conversationContainer.scrollHeight;
+    }
+
+    function typewriterEffect(chatbot_output, response_div, callback) {
+        let i = 0;
+        let isTag = false;
+        let text = "";
+
+        function typeNextChar() {
+            if (i < chatbot_output.length) {
+                let char = chatbot_output.charAt(i);
+                i++;
+
+                if (char === "<") {
+                    isTag = true;
+                } else if (char === ">") {
+                    isTag = false;
+                }
+
+                text += char;
+                response_div.innerHTML = text;
+
+                if (isTag) {
+                    setTimeout(typeNextChar, 5);
+                } else {
+                    setTimeout(typeNextChar, 5);
+                }
+            } else {
+                if (typeof callback === "function") {
+                    callback();
+                }
+            }
+        }
+
+        typeNextChar();
+    }
+
+    function makeLinksOpenInNewTab(input) {
+        var dom = new DOMParser().parseFromString(input, 'text/html');
+        var links = dom.getElementsByTagName('a');
+        for (var i = 0; i < links.length; i++) {
+            links[i].setAttribute('target', '_blank');
+        }
+        return dom.body.innerHTML;
+    }
+
+    function updateConversation(user_input, chatbot_output) {
+        var response_container = document.createElement("div");
+        response_container.classList.add("response-container");
+
+        var user_input_div = document.createElement("div");
+        user_input_div.classList.add("user-input");
+        user_input_div.innerHTML = user_input;
+
+        var response_div = document.createElement("div");
+        response_div.classList.add("response");
+
+        response_container.appendChild(user_input_div);
+        response_container.appendChild(response_div);
+        document.getElementById("conversation-container").appendChild(response_container);
+
+        typewriterEffect(chatbot_output, response_div, scrollToBottom);
+    }
+
+    function updateUrls(text) {
+        var urlPattern = /((https?:\/\/)|(www\.))[^\s]+/ig;
+        return text.replace(urlPattern, function(match) {
+            var cleanedUrl = cleanUrlPatterns(match);
+            var prefix = /^https?:\/\//.test(cleanedUrl) ? '' : 'http://';
+            return '<a href="' + prefix + cleanedUrl + '" target="_blank">' + cleanedUrl + '</a>';
+        });
+    }
+
+    $(function() {
+        const userId = uuid.v4(); // Generate a UUID for the user
+        localStorage.setItem('user_id', userId); // Store the user_id for future use
+        $('form').submit(function(event) {
+            event.preventDefault();
+            const inputText = $('#input').val();
+            $('.loading').show();
+            $('#submit-btn').prop('disabled', true);
+
+            $.ajax({
+                type: 'POST',
+                url: 'http://127.0.0.1:8800/agent', // for local testing
+                data: JSON.stringify({
+                    user_input: inputText,
+                    user_id: userId,
+                    locale: "eng",
+                    platform: "web"
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    $('.loading').hide();
+                    const showdownConverter = new showdown.Converter({
+                        simpleLineBreaks: true,
+                        excludeTrailingPunctuationFromURLs: true,
+                        smartIndentationFix: true
+                    });
+                    let chatbotOutput = showdownConverter.makeHtml(response.output);
+
+                    chatbotOutput = makeLinksClickable(makeLinksOpenInNewTab(chatbotOutput));
+                    updateConversation(inputText, chatbotOutput);
+                    $('#input').val('');
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    $('.loading').hide();
+                    const errorResponse = JSON.parse(jqXHR.responseText);
+                    alert(errorResponse.detail || 'An error occurred while processing your request.');
+                },
+                complete: function() {
+                    $('#submit-btn').prop('disabled', false);
+                }
+            });
+        });
+    });
+
+    fithEle.style.display = 'flex';
+</script>
+</html>

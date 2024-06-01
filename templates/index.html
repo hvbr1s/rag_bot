@@ -1,166 +1,166 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <title>SamBot</title>
-    <style>
-        body {
-            background-color: #1E1E1E;
-            color: #E5E5E5;
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            flex-direction: column;
-            padding: 12px;
-            margin: 0;
-            min-height: 100vh;
-        }
-
-        h1 {
-            font-family: 'Press Start 2P', cursive;
-            color: #00FF7F;
-            text-align: center;
-            margin-bottom: 16px;
-        }
-
-        form {
-            margin: 0 auto;
-            width: 100%;
-            max-width: 600px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 1.2em;
-            color: #E5E5E5;
-        }
-
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 12px;
-            border: 1px solid #333;
-            border-radius: 5px;
-            background-color: #333;
-            color: #E5E5E5;
-            font-size: 1em;
-        }
-
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #00FF7F;
-        }
-
-        #submit-btn {
-            background-color: #00FF7F;
-            color: #1E1E1E;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            font-family: 'Press Start 2P', cursive;
-        }
-
-        #submit-btn:disabled {
-            background-color: grey;
-        }
-
-        #submit-btn:hover:not(:disabled) {
-            background-color: #00cc66;
-        }
-
-        .response-container {
-            margin-top: 16px;
-            margin-bottom: 16px;
-        }
-
-        .user-input, .response {
-            background-color: #2A2A2A;
-            padding: 12px;
-            border-radius: 5px;
-            margin-bottom: 12px;
-            word-wrap: break-word;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .response {
-            background-color: #3A3A3A;
-        }
-
-        .loading {
-            display: none;
-            margin-top: 8px;
-            text-align: center;
-            font-size: 1.2em;
-        }
-
-        .conversation-wrapper {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            position: relative;
-            z-index: 1;
-        }
-
-        #conversation-container {
-            max-width: 800px;
-            margin: 0 auto;
-            overflow-y: auto;
-            width: 100%;
-        }
-
-        a {
-            color: #00FF7F;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        @keyframes typewriter {
-            from {
-                width: 0;
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+        <title>SamBot</title>
+        <style>
+            body {
+                background-color: #1E1E1E;
+                color: #E5E5E5;
+                font-family: 'Inter', sans-serif;
+                display: flex;
+                flex-direction: column;
+                padding: 12px;
+                margin: 0;
+                min-height: 100vh;
             }
-            to {
+    
+            h1 {
+                font-family: 'Press Start 2P', cursive;
+                color: #00FF7F;
+                text-align: center;
+                margin-bottom: 16px;
+            }
+    
+            form {
+                margin: 0 auto;
                 width: 100%;
+                max-width: 600px;
             }
-        }
-
-        .typewriter {
-            overflow: hidden;
-            white-space: nowrap;
-            animation: typewriter 1s steps(50, end) forwards;
-        }
-
-        p {
-            font-family: 'Inter', sans-serif;
-        }
-
-        @media (max-width: 640px) {
+    
+            label {
+                display: block;
+                margin-bottom: 8px;
+                font-size: 1.2em;
+                color: #E5E5E5;
+            }
+    
             input[type="text"] {
                 width: 100%;
+                padding: 12px;
+                margin-bottom: 12px;
+                border: 1px solid #333;
+                border-radius: 5px;
+                background-color: #333;
+                color: #E5E5E5;
+                font-size: 1em;
             }
-        }
-
-        @media (max-width: 768px) {
-            input[type="text"] {
+    
+            input[type="text"]:focus {
+                outline: none;
+                border-color: #00FF7F;
+            }
+    
+            #submit-btn {
+                background-color: #00FF7F;
+                color: #1E1E1E;
+                padding: 12px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 1em;
+                font-family: 'Press Start 2P', cursive;
+            }
+    
+            #submit-btn:disabled {
+                background-color: grey;
+            }
+    
+            #submit-btn:hover:not(:disabled) {
+                background-color: #00cc66;
+            }
+    
+            .response-container {
+                margin-top: 16px;
+                margin-bottom: 16px;
+            }
+    
+            .user-input, .response {
+                background-color: #2A2A2A;
+                padding: 12px;
+                border-radius: 5px;
+                margin-bottom: 12px;
+                word-wrap: break-word;
+                font-family: 'Inter', sans-serif;
+            }
+    
+            .response {
+                background-color: #3A3A3A;
+            }
+    
+            .loading {
+                display: none;
+                margin-top: 8px;
+                text-align: center;
+                font-size: 1.2em;
+            }
+    
+            .conversation-wrapper {
+                display: flex;
+                justify-content: center;
+                width: 100%;
+                position: relative;
+                z-index: 1;
+            }
+    
+            #conversation-container {
+                max-width: 800px;
+                margin: 0 auto;
+                overflow-y: auto;
                 width: 100%;
             }
-        }
-
-        @media (max-width: 1024px) {
-            input[type="text"] {
-                width: 100%;
+    
+            a {
+                color: #00FF7F;
+                text-decoration: none;
             }
-        }
-    </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-</head>
+    
+            a:hover {
+                text-decoration: underline;
+            }
+    
+            @keyframes typewriter {
+                from {
+                    width: 0;
+                }
+                to {
+                    width: 100%;
+                }
+            }
+    
+            .typewriter {
+                overflow: hidden;
+                white-space: nowrap;
+                animation: typewriter 1s steps(50, end) forwards;
+            }
+    
+            p {
+                font-family: 'Inter', sans-serif;
+            }
+    
+            @media (max-width: 640px) {
+                input[type="text"] {
+                    width: 100%;
+                }
+            }
+    
+            @media (max-width: 768px) {
+                input[type="text"] {
+                    width: 100%;
+                }
+            }
+    
+            @media (max-width: 1024px) {
+                input[type="text"] {
+                    width: 100%;
+                }
+            }
+        </style>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
 <body>
     <h1>SamBot</h1>
     <div class="conversation-wrapper">
@@ -171,13 +171,13 @@
         <input type="text" name="input" id="input">
         <div id="warning" style="display:none;color:red;margin-top: 8px; margin-bottom: 8px; font-size: small;">⚠️ Please remove email/street addresses.</div>
         <input type="submit" value="Submit" id="submit-btn">
+        <button type="button" id="voice-btn" onclick="toggleVoiceRecording()">Start Voice</button>
     </form>
     <div class="loading"><p><b>Thinking... 🤔</b></p></div>
     <section id="try-again">
-        <a href="http://127.0.0.1:8800/agent">
-        </a>
+        <a href="http://127.0.0.1:8800/agent"></a>
     </section>
-</body>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
 <script>
@@ -285,22 +285,23 @@
         return dom.body.innerHTML;
     }
 
-    function updateConversation(user_input, chatbot_output) {
+    function updateConversation(sender, message) {
         var response_container = document.createElement("div");
         response_container.classList.add("response-container");
-
-        var user_input_div = document.createElement("div");
-        user_input_div.classList.add("user-input");
-        user_input_div.innerHTML = user_input;
-
-        var response_div = document.createElement("div");
-        response_div.classList.add("response");
-
-        response_container.appendChild(user_input_div);
-        response_container.appendChild(response_div);
+    
+        var sender_div = document.createElement("div");
+        sender_div.classList.add("user-input");
+        sender_div.innerHTML = sender;
+    
+        var message_div = document.createElement("div");
+        message_div.classList.add("response");
+        message_div.innerHTML = message;
+    
+        response_container.appendChild(sender_div);
+        response_container.appendChild(message_div);
         document.getElementById("conversation-container").appendChild(response_container);
-
-        typewriterEffect(chatbot_output, response_div, scrollToBottom);
+    
+        typewriterEffect(message, message_div, scrollToBottom);
     }
 
     function updateUrls(text) {
@@ -356,6 +357,66 @@
         });
     });
 
+    let recording = false;
+    let startTime;
+
+    function toggleVoiceRecording() {
+        const voiceButton = document.getElementById('voice-btn');
+        if (!recording) {
+            // Start recording
+            startTime = new Date();
+            voiceButton.textContent = 'Stop Voice';
+            recording = true;
+            startRecording();
+        } else {
+            // Stop recording
+            const endTime = new Date();
+            const duration = (endTime - startTime) / 1000; // Duration in seconds
+            console.log(`Duration: ${duration} seconds`); // Debug statement
+            voiceButton.textContent = 'Start Voice';
+            recording = false;
+            stopRecording(duration);
+        }
+    }
+
+    function startRecording() {
+        console.log('Recording started');
+        fetch('http://127.0.0.1:8880/start', {
+            method: 'POST',
+        })
+        .then(response => response.json())
+        .then(data => console.log('Started recording', data))
+        .catch(error => console.error('Error starting recording:', error));
+    }
+
+    function stopRecording(duration) {
+        console.log('Recording stopped');
+        $('.loading').show(); // Show the loading indicator
+        fetch('http://127.0.0.1:8880/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ duration: Math.min(duration, 20) }) // Cap duration at 20 seconds
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Stopped recording', data);
+            $('.loading').hide(); // Hide the loading indicator
+    
+            const question = data.question || 'No question returned';
+            const reply = data.reply || 'No reply returned';
+    
+            updateConversation(question, reply); // Update the conversation with the question
+            
+        })
+        .catch(error => {
+            console.error('Error stopping recording:', error);
+            $('.loading').hide(); // Hide the loading indicator
+        });
+    }
+
     fithEle.style.display = 'flex';
 </script>
+</body>
 </html>
