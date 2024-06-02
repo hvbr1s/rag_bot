@@ -1,12 +1,10 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 import sounddevice as sd
 print(sd.query_devices())
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import wavio
-import numpy as np
 import os
 import aiohttp
 import asyncio
@@ -14,10 +12,11 @@ import asyncio
 # Initialize environment variables
 load_dotenv()
 
+# Initialize app and CORS policies
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this as needed
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,9 +25,11 @@ app.add_middleware(
 class RecordRequest(BaseModel):
     duration: float
 
+# Load API key
 GLADIA_KEY = os.environ['GLADIA_KEY']
 
-device_index = 4  # Your C922 Pro Stream Webcam index
+# Prepare device
+device_index = 4  
 device_info = sd.query_devices(device_index, 'input')
 samplerate = int(device_info['default_samplerate'])
 file_path = "./voice/output.wav"
@@ -61,7 +62,7 @@ async def upload_audio(file_path):
                     print(f"Response status code: {response.status}")
                     response_text = await response.text()
                     print(f"Response content: {response_text}")
-                    response.raise_for_status()  # Ensure we notice bad responses
+                    response.raise_for_status()  
                     return await response.json()
     except FileNotFoundError:
         print(f"File not found: {file_full_path}")
@@ -105,18 +106,13 @@ async def post_transcription(transcription):
     headers = {"Content-Type": "application/json"}
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=data) as response:
-            response.raise_for_status()  # Ensure we notice bad responses
+            response.raise_for_status() 
             return await response.json()
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    with open("static/index.html", 'r') as f:
-        return HTMLResponse(content=f.read())
 
 @app.post("/start")
 async def start_recording():
     global audio_data
-    duration = 20  # Set a maximum duration
+    duration = 20  # Maximum duration
     audio_data = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=2, dtype='int16', device=device_index)
     print("Recording started")
     return {"status": "recording started"}
@@ -153,3 +149,5 @@ async def stop_recording(record_request: RecordRequest):
     print(f"Deleted file {file_path}")
     
     return {"question": transcription, "reply": ans}
+
+# start command -> uvicorn sound:app --reload --port 8880
