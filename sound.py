@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import sounddevice as sd
 print(sd.query_devices())
-from dotenv import load_dotenv
+from dotenv import main
 from pydantic import BaseModel
 import wavio
 import os
@@ -10,7 +10,7 @@ import aiohttp
 import asyncio
 
 # Initialize environment variables
-load_dotenv()
+main.load_dotenv()
 
 # Initialize app and CORS policies
 app = FastAPI()
@@ -80,7 +80,7 @@ async def get_transcription(audio_url):
     
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.gladia.io/v2/transcription/", headers=headers, json=data) as response:
-            response.raise_for_status()  # Ensure we notice bad responses
+            response.raise_for_status()
             response_data = await response.json()
             
             result_url = response_data.get("result_url")
@@ -101,7 +101,7 @@ async def post_transcription(transcription):
         "user_input": transcription,
         "user_locale": "eng",
         "user_id": "8811",
-        "platform": "slack"
+        "platform": "web"
     }
     headers = {"Content-Type": "application/json"}
     async with aiohttp.ClientSession() as session:
