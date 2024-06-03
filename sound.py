@@ -23,16 +23,19 @@ app.add_middleware(
 )
 
 class RecordRequest(BaseModel):
-    duration: float
+    duration: float;
+    user_id: str | None = None
 
 # Load API key
 GLADIA_KEY = os.environ['GLADIA_KEY']
 
 # Prepare device
-device_index = 4  
-device_info = sd.query_devices(device_index, 'input')
-samplerate = int(device_info['default_samplerate'])
-file_path = "./voice/output.wav"
+
+device_index = sd.default.device
+print(f'Device-> {device_index}')# Ensure default is used for input and output
+device_info = sd.query_devices(device_index, 'input')  # Automatically queries the default input device
+samplerate = int(device_info['default_samplerate']) # Extract the default sample rate from the device information
+file_path = "./voice/output.wav" # Set the file path where the audio will be saved
 
 def record_audio(duration, samplerate, device):
     print("Recording...")
@@ -95,12 +98,12 @@ async def get_transcription(audio_url):
                     return poll_data.get("result", {}).get("transcription", {}).get("full_transcript")
                 await asyncio.sleep(1)
 
-async def post_transcription(transcription):
+async def post_transcription(transcription, user_id):
     url = 'http://127.0.0.1:8800/agent'
     data = {
         "user_input": transcription,
         "user_locale": "eng",
-        "user_id": "8811",
+        "user_id": user_id,
         "platform": "web"
     }
     headers = {"Content-Type": "application/json"}
@@ -124,6 +127,9 @@ async def stop_recording(record_request: RecordRequest):
     print("Recording stopped")
     duration = record_request.duration  # seconds
     print(f"Received duration: {duration} seconds")
+    # user_id = record_request.user_id
+    user_id = '8888'
+    print(f'User ID->{user_id}')
     
     # Save audio data
     save_wav(file_path, audio_data, samplerate)
@@ -139,7 +145,7 @@ async def stop_recording(record_request: RecordRequest):
     print(transcription)
     
     # Post transcription to another API
-    result = await post_transcription(transcription)
+    result = await post_transcription(transcription, user_id)
     print(f'Server answer ----->>>> {result}')
     ans = result["output"]
     print(ans)
