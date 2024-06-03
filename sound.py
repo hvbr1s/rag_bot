@@ -30,9 +30,7 @@ class RecordRequest(BaseModel):
 GLADIA_KEY = os.environ['GLADIA_KEY']
 
 # Prepare device
-
-device_index = sd.default.device
-print(f'Device-> {device_index}')# Ensure default is used for input and output
+device_index = sd.default.device # Ensure default is used for input and output
 device_info = sd.query_devices(device_index, 'input')  # Automatically queries the default input device
 samplerate = int(device_info['default_samplerate']) # Extract the default sample rate from the device information
 file_path = "./voice/output.wav" # Set the file path where the audio will be saved
@@ -127,8 +125,7 @@ async def stop_recording(record_request: RecordRequest):
     print("Recording stopped")
     duration = record_request.duration  # seconds
     print(f"Received duration: {duration} seconds")
-    # user_id = record_request.user_id
-    user_id = '8888'
+    user_id = record_request.user_id # fetch unique UserId
     print(f'User ID->{user_id}')
     
     # Save audio data
@@ -146,7 +143,6 @@ async def stop_recording(record_request: RecordRequest):
     
     # Post transcription to another API
     result = await post_transcription(transcription, user_id)
-    print(f'Server answer ----->>>> {result}')
     ans = result["output"]
     print(ans)
     
