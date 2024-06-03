@@ -328,9 +328,17 @@
         });
     }
 
+    function getUserId() {
+        let userId = localStorage.getItem('user_id');
+        if (!userId) {
+            userId = uuid.v4(); // Generate a new UUID if not present
+            localStorage.setItem('user_id', userId);
+        }
+        return userId;
+    }
+
     $(function() {
-        const userId = uuid.v4(); // Generate a UUID for the user
-        localStorage.setItem('user_id', userId); // Store the user_id for future use
+        const userId = getUserId();
         $('form').submit(function(event) {
             event.preventDefault();
             const inputText = $('#input').val();
@@ -405,8 +413,7 @@
     }
 
     function stopRecording(duration) {
-        const userId = uuid.v4(); // Generate a UUID for the user
-        localStorage.setItem('user_id', userId)
+        const userId = getUserId();
         console.log('Recording stopped');
         $('.loading').show(); // Show the loading indicator
         fetch('http://127.0.0.1:8880/stop', {
