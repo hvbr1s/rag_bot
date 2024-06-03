@@ -87,14 +87,21 @@ async def get_transcription(audio_url):
             result_url = response_data.get("result_url")
             if not result_url:
                 raise ValueError("Result URL is missing in the transcription response.")
-        
+            
+        print("Transcription in progress...", end="", flush=True)
+        progress_dots = ""
         while True:
             async with session.get(result_url, headers=headers) as poll_response:
+                poll_response.raise_for_status()
                 poll_data = await poll_response.json()
-                print(poll_data)
                 if poll_data.get("status") == "done":
+                    print("\033[K\nTranscription complete!")
                     return poll_data.get("result", {}).get("transcription", {}).get("full_transcript")
-                await asyncio.sleep(1)
+                else:
+                    progress_dots += "."
+                    print(f"\rTranscription in progress...{progress_dots}", end="", flush=True)
+                    await asyncio.sleep(1) 
+                
 
 async def post_transcription(transcription, user_id):
     url = 'http://127.0.0.1:8800/agent'
