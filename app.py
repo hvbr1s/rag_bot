@@ -18,6 +18,7 @@ from datetime import datetime
 import json
 import asyncio
 import time
+import asyncio
 
 # Initialize environment variables
 main.load_dotenv()
@@ -33,11 +34,7 @@ async def get_api_key(api_key_header: str = Depends(api_key_header)):
 
 # Initialize OpenAI client & Embedding model
 openai_key = os.environ['OPENAI_API_KEY']
-openai_client = AsyncOpenAI(
-
-    api_key=openai_key,
-    
-)
+openai_client = AsyncOpenAI(api_key=openai_key)
 
 # Define query class
 class Query(BaseModel):
@@ -61,7 +58,14 @@ crew = Crew(
 # Agent handling function
 async def agent(task):
     print(f"Processing task-> {task}")
-    response = crew.kickoff(inputs={"topic": task})
+
+    # Define a synchronous function wrapper
+    def synchronous_agent():
+        response = crew.kickoff(inputs={"topic": task})
+        return response
+
+    # Use asyncio.to_thread to run the synchronous function in a separate thread
+    response = await asyncio.to_thread(synchronous_agent)
     return response
 
 # Initialize user state and periodic cleanup function

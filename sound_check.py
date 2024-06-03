@@ -1,4 +1,5 @@
 import sounddevice as sd
+print(sd.query_devices())
 import wavio
 import numpy as np
 
@@ -14,7 +15,7 @@ def save_wav(file_path, data, samplerate):
     print(f"Saved to {file_path}")
 
 duration = 10  # seconds
-device_index = 4  # Your C922 Pro Stream Webcam index
+device_index = 12  # Your C922 Pro Stream Webcam index
 device_info = sd.query_devices(device_index, 'input')
 samplerate = int(device_info['default_samplerate'])
 file_path = "./voice/output.wav"
